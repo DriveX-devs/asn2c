@@ -28,6 +28,32 @@ ulong_optimization(arg_t *arg, asn1p_expr_type_e etype, asn1cnst_range_t *r_size
 		&& native_long_sign(arg, r_value) == 0);
 }
 
+
+char *escape_for_c_string(const char *input) {
+    if (input == NULL) return NULL;
+
+    size_t len = strlen(input);
+    // Worst case: ogni carattere va escapato → 2x spazio
+    char *escaped = malloc(len * 2 + 1);
+    if (!escaped) return NULL;
+
+    char *dst = escaped;
+    for (const char *src = input; *src; ++src) {
+        if (*src == '\\') {
+            *dst++ = '\\';
+            *dst++ = '\\';
+        } else if (*src == '"') {
+            *dst++ = '\\';
+            *dst++ = '"';
+        } else {
+            *dst++ = *src;
+        }
+    }
+    *dst = '\0';
+    return escaped;
+}
+
+
 static void
 emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
     //OUT("printf(\"Sono dentro\");\n");
@@ -57,7 +83,8 @@ emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
 
         // Inserisci il pattern direttamente come stringa C corretta
         const char *pattern = (const char *)ct->elements[i]->value->value.string.buf;
-        OUT("PCRE2_SPTR pattern = (PCRE2_SPTR)\"%s\";\n", pattern);
+        char *escaped_pattern = escape_for_c_string(pattern);
+        OUT("PCRE2_SPTR pattern = (PCRE2_SPTR)\"%s\";\n", escaped_pattern);
         OUT("PCRE2_SPTR subject = (PCRE2_SPTR)c_string;\n");
 
         OUT("int errorcode;\n");
@@ -127,12 +154,12 @@ emit_pattern_constraint_union(arg_t *arg, asn1p_constraint_t *ct, int i, int j ,
         }
 
         const char *pattern = ct->elements[i]->elements[j]->value->value.string.buf;
-
+        char *escaped_pattern = escape_for_c_string(pattern);
         if (first_pattern == 0) {
-            OUT("PCRE2_SPTR pattern = (PCRE2_SPTR)\"%s\";\n", pattern);
+            OUT("PCRE2_SPTR pattern = (PCRE2_SPTR)\"%s\";\n", escaped_pattern);
             OUT("re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, 0, &errorcode, &erroffset, NULL);\n");
         } else {
-            OUT("pattern = (PCRE2_SPTR)\"%s\";\n", pattern);
+            OUT("pattern = (PCRE2_SPTR)\"%s\";\n", escaped_pattern);
             OUT("re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, 0, &errorcode, &erroffset, NULL);\n");
         }
 
