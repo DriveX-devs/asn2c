@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CLionExternalBuildManager">
+    <target id="982281f3-59e5-4560-8c37-7e0d5f18217f" name="Prova1" defaultType="MAKE">
+      <configuration id="11e6972a-81e5-4d22-8cc0-e7053f6957ae" name="Prova1" toolchainName="Default">
+        <build type="MAKE">
+          <make targetName="Makefile" />
+        </build>
+        <clean type="MAKE">
+          <make targetName="make clean" />
+        </clean>
+      </configuration>
+    </target>
+  </component>
+</project>
