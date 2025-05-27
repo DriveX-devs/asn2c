@@ -161,6 +161,36 @@ asn1constraint_resolve(arg_t *arg, asn1p_constraint_t *ct, asn1p_expr_type_e ety
 		break;
 	case ACT_CT_WCOMP:
 	case ACT_CT_WCOMPS:
+	    //DEBUG("Constraints con WCOMP/WCOMPS non supportate\n");
+	   //  if(etype != ASN_CONSTR_MASK	) {
+	   //      FATAL("WITH COMPONENT può essere applicato solo a SEQUENCE OF/SET OF, trovato %d", etype);
+	   //      //rvalue = -1;
+	   //      break;
+	   //  }
+    //
+	   //  /* Recupera il tipo dell'elemento della SEQUENCE OF/SET OF*/
+	   //  if(arg->expr) {
+	   //      asn1p_expr_t *element_type = NULL;
+    //
+	   //      /* Verificare se ci sono membri*/
+	   //      TQ_FOR(element_type, &arg->expr->members, next) {
+	   //          /* Abbiamo trovato il primo membro*/
+	   //          printf("element_type trovato: %s (tipo: %d)\n",
+    //                 element_type->Identifier ? element_type->Identifier : "senza nome",
+    //                 element_type->expr_type);
+    //
+	   //      }
+    //
+	   //      if(!element_type) {
+	   //          FATAL("Elemento della SEQUENCE OF mancante");
+	   //          rvalue = -1;
+	   //      }
+	   //  } else {
+	   //      FATAL("Espressione non valida per vincolo WITH COMPONENT");
+	   //      //rvalue = -1;
+	   //  }
+	   //  break;
+        //break;
 	case ACT_CA_CRC:
 		return 0;
 	default:
@@ -291,10 +321,11 @@ constraint_type_resolve(arg_t *arg, asn1p_constraint_t *ct) {
                                     get_reference_from(ct));
         if(!rtype) {
             FATAL(
-                "Cannot find type \"%s\" in constraints "
+                "Cannot find type \"%s\" in constraints PROVA PROVA",
                 "at line %d",
                 asn1f_printable_value(ct->containedSubtype), ct->_lineno);
             return -1;
+            //return 0;
         }
 
         tmparg = *arg;

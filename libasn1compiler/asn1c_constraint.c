@@ -17,7 +17,7 @@ static abuf *emit_range_comparison_code(asn1cnst_range_t *range,
                                           asn1c_integer_t natural_start,
                                           asn1c_integer_t natural_stop);
 static int native_long_sign(arg_t *arg, asn1cnst_range_t *r);	/* -1, 0, 1 */
-
+static void emit_component_constraint_checks(arg_t *arg, asn1p_constraint_t *comp_ct, char *component_name);
 static int
 ulong_optimization(arg_t *arg, asn1p_expr_type_e etype, asn1cnst_range_t *r_size,
 						asn1cnst_range_t *r_value)
@@ -175,20 +175,68 @@ emit_pattern_constraint_union(arg_t *arg, asn1p_constraint_t *ct, int i, int j ,
 }
 
 
+// static void
+// emit_single_value_string_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
+//     if(ct->elements[i]->value->value.string.buf != NULL) {
+//         //Possibile warning qua per cast non esplicito
+//
+//         OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
+//         const char *single_value = ct->elements[i]->value->value.string.buf;
+//         OUT("const char *single_value =  \"%s\";\n", single_value);
+//
+//         OUT("if (strcmp(c_string, single_value) != 0) {\n");
+//         INDENT(+1);
+//         OUT("\t return -1;\n");
+//         OUT("}\n");
+//         INDENT(-1);
+//     }
+// }
+
+
 static void
 emit_single_value_string_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
     if(ct->elements[i]->value->value.string.buf != NULL) {
-        //Possibile warning qua per cast non esplicito
+        const char *raw_constraint_value = (const char *)ct->elements[i]->value->value.string.buf;
+        char *escaped_constraint_value = escape_for_c_string(raw_constraint_value);
+        // La free di escaped_constraint_value (variabile C di questa funzione)
+        // deve essere fatta alla fine di questa funzione.
 
-        OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
-        const char *single_value = ct->elements[i]->value->value.string.buf;
-        OUT("const char *single_value =  \"%s\";\n", single_value);
+        // Nome del campo per i messaggi di errore (se disponibile)
+        const char *field_name_for_error = (arg->expr && arg->expr->Identifier) ? arg->expr->Identifier : "field";
 
-        OUT("if (strcmp(c_string, single_value) != 0) {\n");
+        // Genera codice C per la validazione
+        OUT("            char *actual_runtime_value = strndup((const char *)st->buf, st->size);\n");
+        OUT("            if(!actual_runtime_value) {\n");
         INDENT(+1);
-        OUT("\t return -1;\n");
-        OUT("}\n");
+        OUT("                ASN__CTFAIL(app_key, td, sptr, \"%%%%s: strndup failed for component '%s' (%%%%s:%%%%d)\", td->name, __FILE__, __LINE__);\n", field_name_for_error);
+
+        OUT("                return -1;\n");
         INDENT(-1);
+        OUT("            }\n");
+
+        if (escaped_constraint_value) {
+            OUT("            const char *expected_constraint_literal = \"%s\";\n", escaped_constraint_value);
+            OUT("            if (strcmp(actual_runtime_value, expected_constraint_literal) != 0) {\n");
+            INDENT(+1);
+            OUT("                ASN__CTFAIL(app_key, td, sptr, \"%%%%s: component '%s' value ('%%s') does not match constraint '%%s' (%%%%s:%%%%d)\",\n", field_name_for_error);
+            OUT("                    td->name, actual_runtime_value, expected_constraint_literal, __FILE__, __LINE__);\n");
+            OUT("                free(actual_runtime_value);\n");
+            OUT("                return -1;\n");
+            INDENT(-1);
+            OUT("            }\n");
+            OUT("            free(actual_runtime_value);\n");
+        } else {
+            // Errore durante l'escape del valore del vincolo. Questo è un problema di asn1c.
+            // Genera codice per liberare actual_runtime_value e fallire.
+            OUT("            ASN__CTFAIL(app_key, td, sptr, \"%%%%s: internal error escaping constraint value for component '%s' (%%%%s:%%%%d)\", td->name, __FILE__, __LINE__);\n", field_name_for_error);
+            OUT("            free(actual_runtime_value);\n");
+            OUT("            return -1;\n");
+        }
+
+        // Libera la memoria allocata da escape_for_c_string in questa funzione C (emit_single_value_string_constraint)
+        if(escaped_constraint_value) {
+            free(escaped_constraint_value);
+        }
     }
 }
 
@@ -228,6 +276,417 @@ emit_regex_include(arg_t *arg) {
 
 }
 
+static void
+emit_component_constraint_checks(arg_t *arg, asn1p_constraint_t *comp_ct, char *component_name) {
+    // Cerca l'espressione del componente nella definizione del tipo
+    asn1p_expr_t *comp_expr = NULL;
+    arg_t comp_arg = *arg;  // Clona l'argomento attuale
+
+    // Cerca il componente nella definizione del tipo corrente
+    if (1/*arg->expr->expr_type == ASN_CONSTR_SEQUENCE ||
+        arg->expr->expr_type == ASN_CONSTR_SET ||
+        arg->expr->expr_type == ASN_CONSTR_CHOICE*/) {
+        asn1p_expr_t *child_expr;
+        TQ_FOR(child_expr, &arg->asn->modules.tq_head->members.tq_head->members, next) {
+            int component_exists = child_expr->Identifier && strcmp(child_expr->Identifier, component_name) == 0;
+            if (component_exists){
+                comp_expr = child_expr;
+                break;
+            }
+        }
+    }
+
+    if (!comp_expr) {
+        OUT("    /* Componente '%s' non trovato nella definizione */\n", component_name);
+        return;
+    }
+
+    comp_arg.expr = comp_expr; // Imposta l'espressione per il componente specifico
+    OUT("    /* Controlli specifici per il componente %s */\n", component_name);
+
+    // Itera attraverso i vincoli specifici di questo componente
+    for (int k = 0; k < comp_ct->el_count; k++) {
+        asn1p_constraint_t *constraint = comp_ct->elements[k];
+
+        // L'errore era qui: comp_ct->type è un enum, non un puntatore a enum
+        // Eseguiamo lo switch su constraint->type (non su comp_ct->type)
+
+        // La variabile 'constraint' (che è comp_ct->elements[k]) è già definita dal ciclo for esterno.
+
+    if (constraint->type == ACT_CA_SET) {
+        OUT("    /* Vincolo SET per '%s': controllo dei sotto-vincoli */\n", component_name);
+        // Itera attraverso gli elementi del SET (che sono essi stessi vincoli)
+        for (int m = 0; m < constraint->el_count; m++) {
+            asn1p_constraint_t *sub_constraint = constraint->elements[m];
+            // Applica lo switch al sotto-vincolo
+            OUT("        /* Sotto-vincolo di tipo '%s' per '%s' */\n", asn1p_constraint_type2str(sub_constraint->type), component_name);
+            switch (sub_constraint->type) {
+                case ACT_CT_SIZE:
+                {
+                    OUT("            /* Controllo del vincolo SIZE (sotto-vincolo) per %s */\n", component_name);
+                    asn1p_expr_type_e comp_etype = _find_terminal_type(&comp_arg);
+                    asn1cnst_range_t *comp_s_value = asn1constraint_compute_constraint_range(
+                        comp_arg.expr->Identifier, comp_etype, sub_constraint, ACT_CT_SIZE, 0, 0, 0);
+
+                    if (comp_s_value && !comp_s_value->incompatible && !comp_s_value->empty_constraint) {
+                        char size_var_name_str[128];
+                        sprintf(size_var_name_str, "comp_size_%s_sval", component_name);
+                        const char* size_var_name_ptr = size_var_name_str;
+                        int type_processed_for_size = 1; // Flag per tracciare se il tipo è stato gestito
+
+                        if (comp_arg.expr->marker.flags & EM_OPTIONAL) {
+                            OUT("            if(typed_struct->%s) {\n", component_name); INDENT(+1);
+                            OUT("                long %s;\n", size_var_name_ptr);
+                            switch(comp_etype) {
+                                case ASN_BASIC_BIT_STRING:
+                                    OUT("                if(typed_struct->%s->size > 0) {\n", component_name);
+                                    OUT("                    %s = 8 * typed_struct->%s->size - (typed_struct->%s->bits_unused & 0x07);\n", size_var_name_ptr, component_name, component_name);
+                                    OUT("                } else {\n");
+                                    OUT("                    %s = 0;\n", size_var_name_ptr);
+                                    OUT("                }\n");
+                                    break;
+                                case ASN_STRING_UniversalString:
+                                    OUT("                %s = typed_struct->%s->size >> 2; /* 4 byte per character */\n", size_var_name_ptr, component_name);
+                                    break;
+                                case ASN_STRING_BMPString:
+                                    OUT("                %s = typed_struct->%s->size >> 1; /* 2 byte per character */\n", size_var_name_ptr, component_name);
+                                    break;
+                                case ASN_STRING_UTF8String:
+                                    OUT("                %s = UTF8String_length(typed_struct->%s);\n", size_var_name_ptr, component_name);
+                                    OUT("                if((ssize_t)%s < 0) {\n", size_var_name_ptr);
+                                    OUT("                    ASN__CTFAIL(app_key, td, sptr, \"%%%%s: component '%s' UTF-8: broken encoding (%%%%s:%%%%d)\",\n", component_name);
+                                    OUT("                        td->name, __FILE__, __LINE__);\n");
+                                    OUT("                    return -1;\n");
+                                    OUT("                }\n");
+                                    break;
+                                case ASN_CONSTR_SET_OF:
+                                case ASN_CONSTR_SEQUENCE_OF:
+                                    OUT("                %s = typed_struct->%s->count;\n", size_var_name_ptr, component_name);
+                                    break;
+                                case ASN_BASIC_OCTET_STRING:
+                                default:
+                                    if (comp_etype & ASN_STRING_MASK) {
+                                        OUT("                %s = typed_struct->%s->size;\n", size_var_name_ptr, component_name);
+                                    } else {
+                                        OUT("                /* SIZE check for component %s of type %s not implemented (optional) */\n", component_name, asn1p_expr_type2str[comp_etype]);
+                                        type_processed_for_size = 0;
+                                    }
+                                    break;
+                            }
+
+                            if(type_processed_for_size) {
+                                abuf *comp_ab_s = emit_range_comparison_code(comp_s_value, size_var_name_ptr, 0, 0);
+                                if (comp_ab_s && comp_ab_s->buffer && comp_ab_s->length > 0) {
+                                    OUT("                if (!(%s)) {\n", comp_ab_s->buffer);
+                                    OUT("                    ASN__CTFAIL(app_key, td, sptr,\n");
+                                    OUT("                        \"%%%%s: component '%s' size constraint (sub) violated (%%%%s:%%%%d)\",\n", component_name);
+                                    OUT("                        td->name, __FILE__, __LINE__);\n");
+                                    OUT("                    return -1;\n");
+                                    OUT("                }\n");
+                                }
+                                if (comp_ab_s) abuf_free(comp_ab_s);
+                            }
+                            INDENT(-1); OUT("            }\n");
+                        } else { // Componente non opzionale
+                            OUT("            long %s;\n", size_var_name_ptr);
+                            switch(comp_etype) {
+                                case ASN_BASIC_BIT_STRING:
+                                    OUT("            if(typed_struct->%s.size > 0) {\n", component_name);
+                                    OUT("                %s = 8 * typed_struct->%s.size - (typed_struct->%s.bits_unused & 0x07);\n", size_var_name_ptr, component_name, component_name);
+                                    OUT("            } else {\n");
+                                    OUT("                %s = 0;\n", size_var_name_ptr);
+                                    OUT("            }\n");
+                                    break;
+                                case ASN_STRING_UniversalString:
+                                    OUT("            %s = typed_struct->%s.size >> 2; /* 4 byte per character */\n", size_var_name_ptr, component_name);
+                                    break;
+                                case ASN_STRING_BMPString:
+                                    OUT("            %s = typed_struct->%s.size >> 1; /* 2 byte per character */\n", size_var_name_ptr, component_name);
+                                    break;
+                                case ASN_STRING_UTF8String:
+                                    OUT("            %s = UTF8String_length(&typed_struct->%s);\n", size_var_name_ptr, component_name);
+                                    OUT("            if((ssize_t)%s < 0) {\n", size_var_name_ptr);
+                                    OUT("                ASN__CTFAIL(app_key, td, sptr, \"%%%%s: component '%s' UTF-8: broken encoding (%%%%s:%%%%d)\",\n", component_name);
+                                    OUT("                    td->name, __FILE__, __LINE__);\n");
+                                    OUT("                return -1;\n");
+                                    OUT("            }\n");
+                                    break;
+                                case ASN_CONSTR_SET_OF:
+                                case ASN_CONSTR_SEQUENCE_OF:
+                                    OUT("            %s = typed_struct->%s.count;\n", size_var_name_ptr, component_name);
+                                    break;
+                                case ASN_BASIC_OCTET_STRING:
+                                default:
+                                    if (comp_etype & ASN_STRING_MASK) {
+                                        OUT("            %s = typed_struct->%s.size;\n", size_var_name_ptr, component_name);
+                                    } else {
+                                        OUT("            /* SIZE check for component %s of type %s not implemented (non-optional) */\n", component_name, asn1p_expr_type2str[comp_etype]);
+                                        type_processed_for_size = 0;
+                                    }
+                                    break;
+                            }
+
+                            if(type_processed_for_size) {
+                                abuf *comp_ab_s = emit_range_comparison_code(comp_s_value, size_var_name_ptr, 0, 0);
+                                if (comp_ab_s && comp_ab_s->buffer && comp_ab_s->length > 0) {
+                                    OUT("            if (!(%s)) {\n", comp_ab_s->buffer);
+                                    OUT("                ASN__CTFAIL(app_key, td, sptr,\n");
+                                    OUT("                    \"%%%%s: component '%s' size constraint (sub) violated (%%%%s:%%%%d)\",\n", component_name);
+                                    OUT("                    td->name, __FILE__, __LINE__);\n");
+                                    OUT("                return -1;\n");
+                                    OUT("            }\n");
+                                }
+                                if (comp_ab_s) abuf_free(comp_ab_s);
+                            }
+                        }
+                    }
+                    if (comp_s_value) asn1constraint_range_free(comp_s_value);
+                    break;
+                }
+
+
+                case ACT_EL_RANGE:
+            {
+                OUT("            /* Controllo del vincolo RANGE (sotto-vincolo) per %s */\n", component_name);
+                asn1p_expr_type_e comp_etype = _find_terminal_type(&comp_arg);
+                asn1cnst_range_t *comp_r_value = asn1constraint_compute_constraint_range(
+                    comp_arg.expr->Identifier, comp_etype, sub_constraint, ACT_EL_RANGE, 0, 0, 0);
+
+                if (comp_r_value && !comp_r_value->incompatible && !comp_r_value->empty_constraint) {
+                    asn1cnst_range_t *type_intrinsic_range = NULL;
+                    if (comp_r_value->left.type == ARE_MIN || comp_r_value->right.type == ARE_MAX) {
+                        type_intrinsic_range = asn1constraint_compute_constraint_range(
+                            comp_arg.expr->Identifier, comp_etype, comp_arg.expr->constraints, ACT_EL_RANGE, 0, 0, 0);
+
+                        if (type_intrinsic_range && !type_intrinsic_range->incompatible && !type_intrinsic_range->empty_constraint) {
+                            if (comp_r_value->left.type == ARE_MIN && type_intrinsic_range->left.type == ARE_VALUE) {
+                                asn1c_integer_t type_left_val = type_intrinsic_range->left.value;
+                                if (comp_r_value->right.type == ARE_MAX ||
+                                    (comp_r_value->right.type == ARE_VALUE && type_left_val <= comp_r_value->right.value)) {
+                                    comp_r_value->left.value = type_left_val;
+                                    comp_r_value->left.type = ARE_VALUE;
+                                }
+                            }
+                            if (comp_r_value->right.type == ARE_MAX && type_intrinsic_range->right.type == ARE_VALUE) {
+                                asn1c_integer_t type_right_val = type_intrinsic_range->right.value;
+                                if (comp_r_value->left.type == ARE_MIN ||
+                                    (comp_r_value->left.type == ARE_VALUE && comp_r_value->left.value <= type_right_val)) {
+                                    comp_r_value->right.value = type_right_val;
+                                    comp_r_value->right.type = ARE_VALUE;
+                                }
+                            }
+                        }
+                    }
+
+                    char val_var_name_str[128];
+                    const char* val_var_name_ptr = NULL;
+
+                    if (comp_etype == ASN_BASIC_INTEGER || comp_etype == ASN_BASIC_ENUMERATED) {
+                        sprintf(val_var_name_str, "val_comp_%s_srange", component_name);
+                        val_var_name_ptr = val_var_name_str;
+                        enum asn1c_fitslong_e fits = asn1c_type_fits_long(&comp_arg, comp_arg.expr);
+                        if (comp_arg.expr->marker.flags & EM_OPTIONAL) {
+                            OUT("            if(typed_struct->%s) {\n", component_name); INDENT(+1);
+                        }
+                        if (fits == FL_FITS_UNSIGN) {
+                            OUT("            unsigned long %s = typed_struct->%s;\n", val_var_name_ptr, component_name);
+                        } else if (fits == FL_FITS_SIGNED) {
+                            OUT("            long %s = typed_struct->%s;\n", val_var_name_ptr, component_name);
+                        } else { /* FL_NOTFIT */
+                            OUT("            long %s;\n", val_var_name_ptr);
+                            OUT("            if(asn_INTEGER2long(&typed_struct->%s, &%s) != 0) {\n", component_name, val_var_name_ptr);
+                            OUT("                ASN__CTFAIL(app_key, td, sptr, \"%%%%s: value of component '%s' too large for range check (%%%%s:%%%%d)\",\n", component_name);
+                            OUT("                    td->name, __FILE__, __LINE__);\n");
+                            OUT("                return -1;\n");
+                            OUT("            }\n");
+                        }
+                    } else if (comp_etype == ASN_BASIC_REAL) {
+                        sprintf(val_var_name_str, "val_comp_%s_srange", component_name);
+                        val_var_name_ptr = val_var_name_str;
+                        if (comp_arg.expr->marker.flags & EM_OPTIONAL) {
+                            OUT("            if(typed_struct->%s) {\n", component_name); INDENT(+1);
+                        }
+                        OUT("            double %s = typed_struct->%s;\n", val_var_name_ptr, component_name);
+                    } else {
+                        OUT("            // Range check for component %s of type %s not yet implemented for sub-constraint.\n", component_name, asn1p_expr_type2str[comp_etype]);
+                        if (type_intrinsic_range) asn1constraint_range_free(type_intrinsic_range);
+                        if (comp_r_value) asn1constraint_range_free(comp_r_value);
+                        break;
+                    }
+
+                    if (val_var_name_ptr) {
+                        abuf *comp_ab = emit_range_comparison_code(comp_r_value, val_var_name_ptr,
+                                                                 (comp_etype == ASN_BASIC_INTEGER || comp_etype == ASN_BASIC_ENUMERATED)
+                                                                 && native_long_sign(&comp_arg, comp_r_value) >= 0,
+                                                                 0);
+
+                        if (comp_ab && comp_ab->buffer && comp_ab->length > 0) {
+                            OUT("            if (!(%s)) {\n", comp_ab->buffer);
+                            OUT("                ASN__CTFAIL(app_key, td, sptr,\n");
+                            OUT("                    \"%%%%s: component '%s' range constraint (sub) violated (%%%%s:%%%%d)\",\n", component_name);
+                            OUT("                    td->name, __FILE__, __LINE__);\n");
+                            OUT("                return -1;\n");
+                            OUT("            }\n");
+                        }
+                        if (comp_ab) abuf_free(comp_ab);
+                    }
+                    if (comp_arg.expr->marker.flags & EM_OPTIONAL && (comp_etype == ASN_BASIC_INTEGER || comp_etype == ASN_BASIC_ENUMERATED || comp_etype == ASN_BASIC_REAL)) {
+                        INDENT(-1); OUT("            }\n");
+                    }
+                    if (type_intrinsic_range) asn1constraint_range_free(type_intrinsic_range);
+                }
+                if (comp_r_value) asn1constraint_range_free(comp_r_value);
+                break;
+            }
+
+                case ACT_EL_VALUE:
+                {
+                    OUT("            /* Controllo del vincolo VALUE (sotto-vincolo) per %s */\n", component_name);
+                    asn1p_expr_type_e comp_etype = _find_terminal_type(&comp_arg);
+                    asn1p_value_t *constraint_value = sub_constraint->value;
+
+                    if (!constraint_value) {
+                        OUT("            /* Valore del vincolo non presente per %s nel sotto-vincolo VALUE */\n", component_name);
+                        break;
+                    }
+
+                    int is_optional = (comp_arg.expr->marker.flags & EM_OPTIONAL);
+
+                    switch (comp_etype) {
+                        case ASN_BASIC_INTEGER:
+                            if (constraint_value->type == ATV_INTEGER) {
+                                char actual_value_var_name[128];
+                                sprintf(actual_value_var_name, "actual_comp_%s_svalue", component_name);
+
+                                if (is_optional) {
+                                    OUT("            if(typed_struct->%s) {\n", component_name); INDENT(+1);
+                                }
+
+                                OUT("            long %s;\n", actual_value_var_name);
+
+                                char component_access_for_conversion[256];
+                                if (is_optional) {
+                                    // Assumendo che se is_optional, typed_struct->component_name sia un puntatore a INTEGER_t
+                                    sprintf(component_access_for_conversion, "typed_struct->%s", component_name);
+                                } else {
+                                    sprintf(component_access_for_conversion, "&typed_struct->%s", component_name);
+                                }
+
+                                OUT("            if(asn_INTEGER2long(%s, &%s) != 0) {\n",
+                                    component_access_for_conversion, actual_value_var_name);
+                                INDENT(+1);
+                                OUT("                ASN__CTFAIL(app_key, td, sptr,\n");
+                                OUT("                    \"%%%%s: component '%s' (INTEGER) value too large for constraint check (%%%%s:%%%%d)\",\n",
+                                    component_name);
+                                OUT("                    td->name, __FILE__, __LINE__);\n");
+                                OUT("                return -1;\n");
+                                INDENT(-1);
+                                OUT("            }\n");
+
+                                OUT("            if (%s != (long long)&typed_struct->%s) {\n", actual_value_var_name, component_name);
+                                INDENT(+1);
+                                OUT("                ASN__CTFAIL(app_key, td, sptr,\n");
+                                OUT("                    \"%%%%s: component '%s' (INTEGER) value constraint violated (expected %%lld, got %%ld) (%%%%s:%%%%d)\",\n",
+                                    component_name,
+                                    (long long)constraint_value->value.v_integer,
+                                    actual_value_var_name);
+                                OUT("                    td->name, __FILE__, __LINE__);\n");
+                                OUT("                return -1;\n");
+                                INDENT(-1);
+                                OUT("            }\n");
+
+                                if (is_optional) {
+                                    INDENT(-1); OUT("            }\n");
+                                }
+                            } else {
+                                OUT("            /* Tipo di valore del vincolo (enum: %d) non corrispondente per INTEGER per %s */\n",
+                                    (int)constraint_value->type, component_name);
+                            }
+                            break; // Fine case ASN_BASIC_INTEGER
+
+
+                        case ASN_BASIC_OCTET_STRING:
+                        case ASN_STRING_UTF8String:
+                        case ASN_STRING_PrintableString:
+                        case ASN_STRING_VisibleString: /* alias ISO646String */
+                        case ASN_STRING_IA5String:
+                        case ASN_STRING_NumericString:
+                            if (constraint_value->type == ATV_STRING) {
+                                if (is_optional) {
+                                    OUT("            if(typed_struct->%s) {\n", component_name); INDENT(+1);
+                                    OUT("                const OCTET_STRING_t *st = (const OCTET_STRING_t *)typed_struct->%s;\n", component_name);
+                                    OUT("                /* ATTENZIONE: La seguente chiamata usa emit_single_value_string_constraint. */\n");
+                                    OUT("                /* Questa funzione usa strndup (richiede free per 'c_string'), strcmp (non sicuro per binari), */\n");
+                                    OUT("                /* e ritorna -1 direttamente senza ASN__CTFAIL. */\n");
+                                    emit_single_value_string_constraint(&comp_arg, constraint, m); // constraint è ct, m è l'indice
+                                    OUT("                if(st && st->buf) free((char *)c_string); /* Liberare la memoria allocata da strndup in emit_single_value_string_constraint */\n");
+                                    INDENT(-1); OUT("            }\n");
+                                } else {
+                                    OUT("            const OCTET_STRING_t *st = (const OCTET_STRING_t *)&typed_struct->%s;\n", component_name);
+                                    OUT("            /* ATTENZIONE: La seguente chiamata usa emit_single_value_string_constraint. */\n");
+                                    OUT("            /* Questa funzione usa strndup (richiede free per 'c_string'), strcmp (non sicuro per binari), */\n");
+                                    OUT("            /* e ritorna -1 direttamente senza ASN__CTFAIL. */\n");
+                                    emit_single_value_string_constraint(&comp_arg, constraint, m); // constraint è ct, m è l'indice
+                                    OUT("            if(st && st->buf) free((char *)c_string); /* Liberare la memoria allocata da strndup in emit_single_value_string_constraint */\n");
+                                }
+                            } else {
+                                OUT("            /* Tipo di valore del vincolo (enum: %d) non corrispondente per %s per %s */\n",
+                                    (int)constraint_value->type, asn1p_expr_type2str[comp_etype], component_name);
+                            }
+                            break; // Fine case STRING
+
+
+                        default:
+                            OUT("            /* Controllo del vincolo VALUE (sotto-vincolo) non implementato per il tipo %s del componente %s */\n",
+                                asn1p_expr_type2str[comp_etype], component_name);
+                            break;
+                    }
+                    break; // Fine case ACT_EL_VALUE
+                }
+                case ACT_CT_PATTERN:
+                    // TODO: Implementare il controllo del vincolo PATTERN (sotto-vincolo)
+                    OUT("            // TODO: Implementare il controllo del vincolo PATTERN (sotto-vincolo) per %s\n", component_name);
+                    break;
+                default:
+                    // Tipo di sotto-vincolo non supportato
+                    OUT("            // Tipo di sotto-vincolo '%s' non gestito per %s\n", asn1p_constraint_type2str(sub_constraint->type), component_name);
+                    break;
+            }
+        }
+    } else {
+        // Comportamento originale: lo switch si applica direttamente a 'constraint'
+        OUT("    /* Controllo del vincolo di tipo '%s' per il componente '%s' */\n", asn1p_constraint_type2str(constraint->type), component_name);
+        switch (constraint->type) {
+            case ACT_CT_SIZE:
+                // TODO: Implementare il controllo del vincolo SIZE
+                OUT("        // TODO: Implementare il controllo del vincolo SIZE per %s\n", component_name);
+                break;
+            case ACT_EL_RANGE:
+                // TODO: Implementare il controllo del vincolo RANGE
+                OUT("        // TODO: Implementare il controllo del vincolo RANGE per %s\n", component_name);
+                break;
+            case ACT_EL_VALUE:
+                // TODO: Implementare il controllo del vincolo VALUE
+                OUT("        // TODO: Implementare il controllo del vincolo VALUE per %s\n", component_name);
+                break;
+            case ACT_CT_PATTERN:
+                // TODO: Implementare il controllo del vincolo PATTERN
+                OUT("        // TODO: Implementare il controllo del vincolo PATTERN per %s\n", component_name);
+                break;
+            case ACT_CT_CTDBY:
+                // TODO: Implementare il controllo del vincolo CONSTRAINED BY
+                OUT("        // TODO: Implementare il controllo del vincolo CONSTRAINED BY per %s\n", component_name);
+                break;
+            default:
+                // Tipo di vincolo non supportato
+                OUT("        // Tipo di vincolo '%s' non gestito per %s\n", asn1p_constraint_type2str(constraint->type), component_name);
+                break;
+        }
+    }
+    }
+}
+
+
 int
 asn1c_emit_constraint_checking_code(arg_t *arg) {
 	asn1cnst_range_t *r_size;
@@ -253,18 +712,18 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
 		printf("ct address: %p\n", (void*)ct);
 		printf("ct->type raw value: %d\n", ct->type);
 		printf("ct->type as enum: %s\n", asn1p_constraint_type2str(ct->type));
-		
+
 		// Se è un SET, controlla i suoi elementi
 		if (ct->type == ACT_CA_SET && ct->elements != NULL) {
 			printf("Number of elements in SET: %d\n", ct->el_count);
 			for (unsigned int i = 0; i < ct->el_count; i++) {
-				printf("Element %d type: %s\n", i, 
+				printf("Element %d type: %s\n", i,
 					asn1p_constraint_type2str(ct->elements[i]->type));
 			}
 		}
 }
 */
-	
+
 	//Gives back the base type on which the constraint is applied
 	etype = _find_terminal_type(arg);
 	 if (etype & ASN_STRING_MASK) {
@@ -386,7 +845,75 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
                printf("Im in\n");
                 emit_single_value_string_constraint(arg, ct,i);
             }
+            if(ct->elements[i]->type == ACT_CT_WCOMPS) {
+                printf("Im in WITH COMPONETS\n");
+                //Gestione del constraint WCOMPONENTS
+                OUT("//PROVA WITH COMPONENTS \n");
+                asn1p_constraint_t *new_ct = ct->elements[i];
+                // Recupero il nome del tipo (AdultPerson)
+                const char *type_name = arg->expr->Identifier;
+                OUT("// Tipo con vincolo: %s\n", type_name);
+                // Creo un puntatore tipizzato alla struttura per accesso diretto ai campi
+                OUT("// Accesso alla struttura tipizzata\n");
+                OUT("const %s_t *typed_struct = (const %s_t *)sptr;\n", type_name, type_name);
 
+                // Recupero la struttura del tipo corrente per estrarne i membri
+                asn1p_expr_t *type_def = arg->expr;
+                for (unsigned int j = 0; j < new_ct->el_count; j++) {
+                        // char *component_name = new_ct->elements[j]->value->value.reference->components->name;
+                        // if(component_name != NULL) {
+                        //     printf("Componente con vincolo: %s\n", component_name);
+                        //
+                        // }
+                    if(new_ct->elements[j]->value && new_ct->elements[j]->value->type == ATV_REFERENCED) {
+            // Estrai il nome del componente
+            char *component_name = NULL;
+            if(new_ct->elements[j]->value->value.reference &&
+               new_ct->elements[j]->value->value.reference->components) {
+                component_name = new_ct->elements[j]->value->value.reference->components->name;
+            }
+
+            if(component_name) {
+                printf("Componente con vincolo: %s\n", component_name);
+
+                // Genera codice per l'accesso e la verifica del componente
+                OUT("// Verifica del componente: %s\n", component_name);
+                // Controlla la presenza del campo (PRESENT o ABSENT)
+                if(new_ct->elements[j]->presence == ACPRES_PRESENT) {
+                    OUT("if(!typed_struct->%s) {\n", component_name);
+                    OUT("    ASN__CTFAIL(app_key, td, sptr,\n");
+                    OUT("        \"%%s: Component '%s' deve essere presente\",\n", component_name);
+                    OUT("        td->name);\n");
+                    OUT("    return -1;\n");
+                    OUT("}\n");
+                } else if(new_ct->elements[j]->presence == ACPRES_ABSENT) {
+                    OUT("if(typed_struct->%s) {\n", component_name);
+                    OUT("    ASN__CTFAIL(app_key, td, sptr,\n");
+                    OUT("        \"%%s: Component '%s' deve essere assente\",\n", component_name);
+                    OUT("        td->name);\n");
+                    OUT("    return -1;\n");
+                    OUT("}\n");
+                }
+
+                // Se ci sono ulteriori vincoli sul componente
+                if(new_ct->elements[j]->el_count > 0) {
+                    OUT("// Vincoli aggiuntivi sul componente %s\n", component_name);
+                    OUT("if(typed_struct->%s) {\n", component_name);
+
+                    // Chiamata alla funzione per generare i controlli dei vincoli
+                    emit_component_constraint_checks(arg, new_ct->elements[j], component_name);
+
+                    OUT("}\n");
+                }
+            }
+        }
+                    printf("Element %d type: %s\n", j,
+                           asn1p_constraint_type2str(new_ct->elements[j]->type));
+                }
+                // Aggiungi una variabile per facilitare l'elaborazione successiva
+                OUT("// Memorizzazione del tipo per uso successivo\n");
+                OUT("const char *constraint_type = \"%s\";\n", type_name);
+            }
             int value_found = 0;
             int first_string = 0;
             int first_pattern = 0;
@@ -946,7 +1473,7 @@ emit_value_determination_code(arg_t *arg, asn1p_expr_type_e etype, asn1cnst_rang
 		OUT("//Sto provando a modificare i Costrain dei numeri,\n");
 		if(asn1c_type_fits_long(arg, arg->expr) == FL_FITS_UNSIGN) {
 			OUT("value = *(const unsigned long *)sptr;\n");
-			
+
 		} else if(asn1c_type_fits_long(arg, arg->expr) != FL_NOTFIT) {
 			OUT("value = *(const long *)sptr;\n");
 		} else {
