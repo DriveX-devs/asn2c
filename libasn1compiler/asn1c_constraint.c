@@ -6,6 +6,7 @@
 #include "asn1print.h"
 #include <asn1fix_crange.h>	/* constraint groker from libasn1fix */
 #include <asn1fix_export.h>	/* other exportables from libasn1fix */
+#include <ctype.h>
 
 static int asn1c_emit_constraint_tables(arg_t *arg, int got_size);
 static int emit_alphabet_check_loop(arg_t *arg, asn1cnst_range_t *range);
@@ -32,14 +33,75 @@ ulong_optimization(arg_t *arg, asn1p_expr_type_e etype, asn1cnst_range_t *r_size
 char *escape_for_c_string(const char *input) {
     if (input == NULL) return NULL;
 
-    size_t len = strlen(input);
-    // Worst case: ogni carattere va escapato → 2x spazio
-    char *escaped = malloc(len * 2 + 1);
+    // Primo passaggio: calcola la lunghezza necessaria per la stringa di output.
+    size_t required_len = 0;
+    for (const char *src = input; *src; ++src) {
+        if (*src == '\\' && *(src + 1) == 'd') {
+            required_len += 5; // Per "[0-9]"
+            src++;             // Salta 'd'
+        } else if (*src == '\\' && *(src + 1) == 'w') {
+            required_len += 11; // Per "[a-zA-Z0-9]"
+            src++;              // Salta 'w'
+        } else if (*src == '#') {
+            const char *p = src + 1;
+            if (isdigit((unsigned char)*p)) {
+                const char *start_digits = p;
+                while (isdigit((unsigned char)*p)) {
+                    p++;
+                }
+                size_t num_digits = p - start_digits;
+                required_len += 2 + num_digits; // Per '{', cifre, '}'
+                src = p - 1; // Avanza src all'ultima cifra
+            } else {
+                required_len += 1; // Solo un '#'
+            }
+        } else if (*src == '\\' || *src == '"') {
+            required_len += 2; // Per "\\" o "\""
+        } else {
+            required_len += 1;
+        }
+    }
+
+    char *escaped = malloc(required_len + 1); // +1 per il terminatore nullo
     if (!escaped) return NULL;
 
+    // Secondo passaggio: costruisce la stringa con l'escape.
     char *dst = escaped;
     for (const char *src = input; *src; ++src) {
-        if (*src == '\\') {
+        if (*src == '\\' && *(src + 1) == 'd') {
+            *dst++ = '[';
+            *dst++ = '0';
+            *dst++ = '-';
+            *dst++ = '9';
+            *dst++ = ']';
+            src++; // Salta 'd'
+        } else if (*src == '\\' && *(src + 1) == 'w') {
+            *dst++ = '[';
+            *dst++ = 'a';
+            *dst++ = '-';
+            *dst++ = 'z';
+            *dst++ = 'A';
+            *dst++ = '-';
+            *dst++ = 'Z';
+            *dst++ = '0';
+            *dst++ = '-';
+            *dst++ = '9';
+            *dst++ = ']';
+            src++; // Salta 'w'
+        } else if (*src == '#') {
+            const char *p = src + 1;
+            if (isdigit((unsigned char)*p)) {
+                *dst++ = '{';
+                const char *start_digits = p;
+                while (isdigit((unsigned char)*p)) {
+                    *dst++ = *p++;
+                }
+                *dst++ = '}';
+                src = p - 1; // Avanza src all'ultima cifra
+            } else {
+                *dst++ = *src; // Solo un '#'
+            }
+        } else if (*src == '\\') {
             *dst++ = '\\';
             *dst++ = '\\';
         } else if (*src == '"') {
@@ -58,55 +120,64 @@ static void
 emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
     //OUT("printf(\"Sono dentro\");\n");
 
-    // if(ct->elements[i]->value->value.string.buf != NULL) {
-    //     //Possibile warning qua per cast non esplicito
-    //     OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
-    //     const char *pattern = ct->elements[i]->value->value.string.buf;
-    //     OUT("const char *string_pattern =  \"%s\";\n", pattern);
-    //     //Probabile errore per le ""
-    //
-    //     OUT("regex_t regex;\n");
-    //     OUT("int ret = regcomp(&regex, string_pattern , REG_EXTENDED);\n");
-    //     OUT("if (ret) {\n");
-    //     OUT("    return -1;\n");
-    //     OUT("}\n");
-    //     OUT("\n");
-    //     OUT("ret = regexec(&regex, c_string, 0, NULL, 0);\n");
-    //     OUT("regfree(&regex);\n");
-    //     OUT("if (ret) return -1;\n");
-    // }
-    if (ct->elements[i]->value->value.string.buf != NULL) {
-        OUT("// --- PCRE2 MATCH START ---\n");
-
-        // Cast esplicito e copia della stringa
+    if(ct->elements[i]->value->value.string.buf != NULL) {
+        //Possibile warning qua per cast non esplicito
         OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
-
-        // Inserisci il pattern direttamente come stringa C corretta
         const char *pattern = (const char *)ct->elements[i]->value->value.string.buf;
         char *escaped_pattern = escape_for_c_string(pattern);
-        OUT("PCRE2_SPTR pattern = (PCRE2_SPTR)\"%s\";\n", escaped_pattern);
-        OUT("PCRE2_SPTR subject = (PCRE2_SPTR)c_string;\n");
 
-        OUT("int errorcode;\n");
-        OUT("PCRE2_SIZE erroffset;\n");
-        OUT("pcre2_code *re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, 0, &errorcode, &erroffset, NULL);\n");
-        OUT("if (!re) {\n");
-        OUT("    PCRE2_UCHAR buffer[256];\n");
-        OUT("    pcre2_get_error_message(errorcode, buffer, sizeof(buffer));\n");
-        OUT("    fprintf(stderr, \"Regex compilation error: %%s\\n\", buffer);\n");
+        if (escaped_pattern) {
+            OUT("const char *string_pattern =  \"%s\";\n", escaped_pattern);
+            free(escaped_pattern); // Libera la memoria dopo averla usata
+        } else {
+            // Se l'escape fallisce, usa il pattern originale ma potrebbe non funzionare
+            OUT("const char *string_pattern =  \"%s\";\n", pattern);
+        }
+
+        //Probabile errore per le ""
+
+        OUT("regex_t regex;\n");
+        OUT("int ret = regcomp(&regex, string_pattern , REG_EXTENDED);\n");
+        OUT("if (ret) {\n");
         OUT("    return -1;\n");
         OUT("}\n");
-
-        OUT("pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(re, NULL);\n");
-
-        OUT("int rc = pcre2_match(re, subject, strlen((char *)subject), 0, 0, match_data, NULL);\n");
-        OUT("pcre2_match_data_free(match_data);\n");
-        OUT("pcre2_code_free(re);\n");
-
-        OUT("if (rc < 0) return -1;\n");
-
-        OUT("// --- PCRE2 MATCH END ---\n");
+        OUT("\n");
+        OUT("ret = regexec(&regex, c_string, 0, NULL, 0);\n");
+        OUT("regfree(&regex);\n");
+        OUT("if (ret) return -1;\n");
     }
+    // if (ct->elements[i]->value->value.string.buf != NULL) {
+    //     OUT("// --- PCRE2 MATCH START ---\n");
+    //
+    //     // Cast esplicito e copia della stringa
+    //     OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
+    //
+    //     // Inserisci il pattern direttamente come stringa C corretta
+    //     const char *pattern = (const char *)ct->elements[i]->value->value.string.buf;
+    //     char *escaped_pattern = escape_for_c_string(pattern);
+    //     OUT("PCRE2_SPTR pattern = (PCRE2_SPTR)\"%s\";\n", escaped_pattern);
+    //     OUT("PCRE2_SPTR subject = (PCRE2_SPTR)c_string;\n");
+    //
+    //     OUT("int errorcode;\n");
+    //     OUT("PCRE2_SIZE erroffset;\n");
+    //     OUT("pcre2_code *re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, 0, &errorcode, &erroffset, NULL);\n");
+    //     OUT("if (!re) {\n");
+    //     OUT("    PCRE2_UCHAR buffer[256];\n");
+    //     OUT("    pcre2_get_error_message(errorcode, buffer, sizeof(buffer));\n");
+    //     OUT("    fprintf(stderr, \"Regex compilation error: %%s\\n\", buffer);\n");
+    //     OUT("    return -1;\n");
+    //     OUT("}\n");
+    //
+    //     OUT("pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(re, NULL);\n");
+    //
+    //     OUT("int rc = pcre2_match(re, subject, strlen((char *)subject), 0, 0, match_data, NULL);\n");
+    //     OUT("pcre2_match_data_free(match_data);\n");
+    //     OUT("pcre2_code_free(re);\n");
+    //
+    //     OUT("if (rc < 0) return -1;\n");
+    //
+    //     OUT("// --- PCRE2 MATCH END ---\n");
+    // }
 
 }
 
@@ -268,14 +339,15 @@ emit_regex_include(arg_t *arg) {
     int saved_target = arg->target->target;
     printf("Debug: saved_target = %d, OT_INCLUDES = %d\n", saved_target, OT_INCLUDES);
     REDIR(8);
-    //OUT("#include <regex.h>\n");
-    OUT("#define PCRE2_CODE_UNIT_WIDTH 8\n");
-    OUT("#include <pcre2.h>\n");
+    OUT("#include <regex.h>\n");
+    OUT("#include <string.h>\n");
+    //OUT("#define PCRE2_CODE_UNIT_WIDTH 8\n");
+    //OUT("#include <pcre2.h>\n");
     REDIR(saved_target);
     printf("Include regex\n");
 
 }
-
+//Funzione per validazione dei WITH COMPONENTS
 static void
 emit_component_constraint_checks(arg_t *arg, asn1p_constraint_t *comp_ct, char *component_name) {
     // Cerca l'espressione del componente nella definizione del tipo
@@ -414,6 +486,11 @@ emit_component_constraint_checks(arg_t *arg, asn1p_constraint_t *comp_ct, char *
                                 case ASN_CONSTR_SET_OF:
                                 case ASN_CONSTR_SEQUENCE_OF:
                                     OUT("            %s = typed_struct->%s.count;\n", size_var_name_ptr, component_name);
+                                    OUT("            if (%s == 0) {\n", size_var_name_ptr);
+                                    OUT("                ASN__CTFAIL(app_key, td, sptr, \"%%%%s: component '%s' size constraint (non-sub) violated (%%%%s:%%%%d)\",\n", component_name);
+                                    OUT("                    td->name, __FILE__, __LINE__);\n");
+                                    OUT("                return -1;\n");
+                                    OUT("            }\n");
                                     break;
                                 case ASN_BASIC_OCTET_STRING:
                                 default:
@@ -1481,7 +1558,7 @@ emit_value_determination_code(arg_t *arg, asn1p_expr_type_e etype, asn1cnst_rang
 			 * In some cases we can explore our knowledge of
 			 * underlying INTEGER_t->buf format.
 			 */
-			if(r_value->el_count == 0
+					if(r_value->el_count == 0
 			&& (
 				/* Speed-up common case: (0..MAX) */
 				(r_value->left.type == ARE_VALUE
