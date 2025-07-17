@@ -44,16 +44,28 @@
 #ifdef _WIN32
 #include <io.h>
 #include <direct.h>
+#define MKDIR(path) _mkdir(path)
 #else
 #include <dirent.h>
+#include <sys/stat.h>
+#define MKDIR(path) mkdir(path, 0755)
 #endif
+#include <stdbool.h>
+
 
 static void usage(const char *av0); /* Print the Usage screen and exit */
 static int importStandardModules(asn1p_t *asn, const char *skeletons_dir);
+/*
+ * Preprocessor function from preprocessor.c
+ */
+int run_preprocessor(int num_input_files, char **input_files,
+                     const char *output_dir, bool debug_mode);
+
 
 int
 main(int ac, char **av) {
-    fprintf(stdout, "Test message prova prova\n");
+    fprintf(stdout, "Test message prova\n");
+
     enum asn1p_flags asn1_parser_flags = A1P_NOFLAGS;
     enum asn1f_flags asn1_fixer_flags = A1F_NOFLAGS;
     enum asn1c_flags asn1_compiler_flags =
@@ -315,6 +327,27 @@ main(int ac, char **av) {
     }
 
     /*
+     * Run preprocessor on input files.
+     * The preprocessed files will be placed in a temporary directory.
+     * The compiler will then read from that directory.
+     */
+    const char *preprocessed_dir = "preprocessed_temp";
+    MKDIR(preprocessed_dir); /* Create the temporary directory */
+    run_preprocessor(ac, av, preprocessed_dir, false);
+
+    char **preprocessed_files = malloc(ac * sizeof(char *));
+    assert(preprocessed_files);
+    for(i = 0; i < ac; i++) {
+        const char *base_name = a1c_basename(av[i], NULL);
+        size_t path_len = strlen(preprocessed_dir) + 1 + strlen(base_name) + 1;
+        preprocessed_files[i] = malloc(path_len);
+        assert(preprocessed_files[i]);
+        snprintf(preprocessed_files[i], path_len, "%s/%s", preprocessed_dir, base_name);
+    }
+    /* Preprocessing is done, now use preprocessed_files instead of av */
+
+
+    /*
      * Make sure the skeleton directory is out there.
      */
     if(skeletons_dir == NULL) {
@@ -353,9 +386,9 @@ main(int ac, char **av) {
     for(i = 0; i < ac; i++) {
         asn1p_t *new_asn;
 
-        new_asn = asn1p_parse_file(av[i], asn1_parser_flags);
+        new_asn = asn1p_parse_file(preprocessed_files[i], asn1_parser_flags);
         if(new_asn == NULL) {
-            fprintf(stderr, "Cannot parse \"%s\"\n", av[i]);
+            fprintf(stderr, "Cannot parse \"%s\"\n", preprocessed_files[i]);
             exit_code = EX_DATAERR;
             goto cleanup;
         }
@@ -449,6 +482,10 @@ main(int ac, char **av) {
     }
 
 cleanup:
+    for(i = 0; i < ac; i++) {
+        free(preprocessed_files[i]);
+    }
+    free(preprocessed_files);
     asn1p_delete(asn);
     asn1p_lex_destroy();
     if (exit_code) exit(exit_code);

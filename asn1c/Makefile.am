@@ -18,3 +18,7 @@ asn1c_LDADD =                                           \
     $(top_builddir)/libasn1compiler/libasn1compiler.la
 
 bin_PROGRAMS = asn1c
+
+asn1c_SOURCES = \
+    asn1c.c     \
+    preprocessor.c
