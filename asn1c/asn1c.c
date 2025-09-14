@@ -45,12 +45,16 @@
 #include <io.h>
 #include <direct.h>
 #define MKDIR(path) _mkdir(path)
+#define RMDIR(path) _rmdir(path)
 #else
 #include <dirent.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #define MKDIR(path) mkdir(path, 0755)
+#define RMDIR(path) rmdir(path)
 #endif
 #include <stdbool.h>
+#include <glob.h>
 
 
 static void usage(const char *av0); /* Print the Usage screen and exit */
@@ -74,6 +78,7 @@ main(int ac, char **av) {
     int print_arg__print_out = 0;   /* Don't compile, just print parsed */
     int print_arg__fix_n_print = 0; /* Fix and print */
     int warnings_as_errors = 0;     /* Treat warnings as errors */
+    int preprocessor_only = 0;      /* Stop after preprocessor */
     char *skeletons_dir = NULL;     /* Directory with supplementary stuff */
     char *destdir = NULL;           /* Destination for generated files */
     char **debug_type_names = 0;    /* Debug stuff */
@@ -276,6 +281,9 @@ main(int ac, char **av) {
             } else if(strcmp(optarg, "debug-compiler") == 0) {
                 asn1_compiler_flags |= A1C_DEBUG;
                 break;
+            } else if(strcmp(optarg, "debug-pre") == 0) {
+                preprocessor_only = 1;
+                break;
             } else {
                 fprintf(stderr, "-W%s: Invalid argument\n", optarg);
                 exit(EX_USAGE);
@@ -333,16 +341,24 @@ main(int ac, char **av) {
      */
     const char *preprocessed_dir = "preprocessed_temp";
     MKDIR(preprocessed_dir); /* Create the temporary directory */
-    run_preprocessor(ac, av, preprocessed_dir, false);
+    run_preprocessor(ac, (const char **)av, preprocessed_dir, preprocessor_only);
+    if(preprocessor_only) {
+        fprintf(stderr, "Preprocessor finished. Exiting as requested.\n");
+        return 0;
+    }
 
-    char **preprocessed_files = malloc(ac * sizeof(char *));
-    assert(preprocessed_files);
-    for(i = 0; i < ac; i++) {
-        const char *base_name = a1c_basename(av[i], NULL);
-        size_t path_len = strlen(preprocessed_dir) + 1 + strlen(base_name) + 1;
-        preprocessed_files[i] = malloc(path_len);
-        assert(preprocessed_files[i]);
-        snprintf(preprocessed_files[i], path_len, "%s/%s", preprocessed_dir, base_name);
+    glob_t glob_result;
+    memset(&glob_result, 0, sizeof(glob_result));
+    char pattern[256];
+    snprintf(pattern, sizeof(pattern), "%s/*.asn", preprocessed_dir);
+    glob(pattern, GLOB_TILDE, NULL, &glob_result);
+
+    char **preprocessed_files = glob_result.gl_pathv;
+    ac = glob_result.gl_pathc;
+
+    if (ac == 0) {
+        fprintf(stderr, "No preprocessed files found in %s to compile.\n", preprocessed_dir);
+        exit(EX_NOINPUT);
     }
     /* Preprocessing is done, now use preprocessed_files instead of av */
 
@@ -482,10 +498,13 @@ main(int ac, char **av) {
     }
 
 cleanup:
-    for(i = 0; i < ac; i++) {
-        free(preprocessed_files[i]);
+    /* Clean up preprocessed files */
+    for(i = 0; i < (int)glob_result.gl_pathc; i++) {
+        remove(glob_result.gl_pathv[i]);
     }
-    free(preprocessed_files);
+    RMDIR(preprocessed_dir);
+
+    globfree(&glob_result);
     asn1p_delete(asn);
     asn1p_lex_destroy();
     if (exit_code) exit(exit_code);
@@ -618,6 +637,7 @@ usage(const char *av0) {
 "  -Wdebug-parser        Enable verbose debugging output from parser\n"
 "  -Wdebug-fixer         --//-- semantics processor\n"
 "  -Wdebug-compiler      --//-- compiler\n"
+"  -Wdebug-pre           Run only the preprocessor and stop\n"
 "\n"
 
 "  -fbless-SIZE          Allow SIZE() constraint for INTEGER etc (non-std.)\n"

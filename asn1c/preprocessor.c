@@ -4,6 +4,7 @@
 #include <regex.h>
 #include <ctype.h>
 #include <stdbool.h> // Inclusione per usare bool, true, false in C
+#include <glob.h>    // Inclusione per la gestione dei wildcard (globbing)
 
 #define MAX_LINE 1024
 #define MAX_ENTRIES 64
@@ -14,7 +15,7 @@ typedef struct {
     char component[1024];
     char alias[1024];
 } ScopedEntry;
-
+//commento di prova
 ScopedEntry entries[MAX_ENTRIES];
 int entry_count = 0;
 
@@ -34,7 +35,7 @@ int match_line(const char *line, const char *pattern, regmatch_t *matches, int n
 
 // Capitalizza la prima lettera e aggiunge un prefisso generico
 void generate_alias(const char *component, char *alias, size_t alias_size) {
-    snprintf(alias, alias_size, "Alias-%c%s", toupper(component[0]), component + 1);
+    snprintf(alias, alias_size, "Alias%c%s", toupper(component[0]), component + 1);
 }
 
 // Processa il file e restituisce true se è stato modificato
@@ -244,25 +245,43 @@ bool process_file(const char *filename, const char *output_dir, bool debug_mode)
  */
 int run_preprocessor(int num_input_files, const char **input_files, const char *output_dir, bool debug_mode) {
     int modified_files_count = 0;
+    int total_files_processed = 0;
 
     if (num_input_files == 0) {
         fprintf(stderr, "[PREPROCESSOR] Error: No input files provided.\n");
         return 0;
     }
 
-    // Processa ogni file di input
+    glob_t glob_result;
+    memset(&glob_result, 0, sizeof(glob_result));
+
+    // Processa ogni file/pattern di input
     for (int i = 0; i < num_input_files; i++) {
-        printf("--- Preprocessing file: %s ---\n", input_files[i]);
-        // Controlla il valore di ritorno e incrementa il contatore se true
-        if (process_file(input_files[i], output_dir, debug_mode)) {
-            modified_files_count++;
+        // Usa glob per espandere i percorsi. GLOB_NOCHECK restituisce il pattern stesso se non ci sono match.
+        int ret = glob(input_files[i], GLOB_TILDE | GLOB_NOCHECK, NULL, &glob_result);
+        if (ret != 0 && ret != GLOB_NOMATCH) {
+            fprintf(stderr, "glob() failed with return value: %d\n", ret);
+            continue;
         }
-        printf("--- Finished preprocessing: %s ---\n\n", input_files[i]);
+
+        // Itera sui file trovati da glob
+        for (size_t j = 0; j < glob_result.gl_pathc; j++) {
+            total_files_processed++;
+            printf("--- Preprocessing file: %s ---\n", glob_result.gl_pathv[j]);
+            // Controlla il valore di ritorno e incrementa il contatore se true
+            if (process_file(glob_result.gl_pathv[j], output_dir, debug_mode)) {
+                modified_files_count++;
+            }
+            printf("--- Finished preprocessing: %s ---\n\n", glob_result.gl_pathv[j]);
+        }
+        
+        globfree(&glob_result); // Libera la memoria usata da questa chiamata a glob
+        memset(&glob_result, 0, sizeof(glob_result)); // Resetta per il prossimo pattern
     }
 
     // Stampa il riepilogo finale
     printf("--- PREPROCESSOR SUMMARY ---\n");
-    printf("Total files analyzed: %d\n", num_input_files);
+    printf("Total files analyzed: %d\n", total_files_processed);
     printf("Total files modified: %d\n", modified_files_count);
     printf("--------------------------\n\n");
 

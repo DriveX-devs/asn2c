@@ -7,6 +7,55 @@
 #include <asn1fix_crange.h>	/* constraint groker from libasn1fix */
 #include <asn1fix_export.h>	/* other exportables from libasn1fix */
 #include <ctype.h>
+#include <stdbool.h>        /* For bool, true, false */
+
+/*
+ * Replace hyphens with underscores in a string.
+ * The caller is responsible for freeing the returned string.
+ */
+static char *
+asn1c_mangle_name(const char *name) {
+    if(!name) return NULL;
+    char *mangled_name = strdup(name);
+    if(!mangled_name) return NULL;
+    for(char *p = mangled_name; *p; p++) {
+        if(*p == '-') {
+            *p = '_';
+        }
+    }
+    return mangled_name;
+}
+
+/*
+ * Find a component of a structured type by its name.
+ * (Local implementation to avoid linker errors).
+ */
+static asn1p_expr_t *
+asn1f_find_component_by_name(asn1p_expr_t *struct_expr,
+                             const char *comp_name) {
+    asn1p_expr_t *component;
+
+    if(!struct_expr || !comp_name)
+        return NULL;
+
+    /* The expression must be a constructed type */
+    if(struct_expr->expr_type != ASN_CONSTR_SEQUENCE &&
+       struct_expr->expr_type != ASN_CONSTR_SET &&
+       struct_expr->expr_type != ASN_CONSTR_CHOICE &&
+       struct_expr->expr_type != ASN_CONSTR_SEQUENCE_OF &&
+       struct_expr->expr_type != ASN_CONSTR_SET_OF) {
+        return NULL;
+    }
+
+    TQ_FOR(component, &struct_expr->members, next) {
+        if(component->Identifier && strcmp(component->Identifier, comp_name) == 0) {
+            return component;
+        }
+    }
+
+    return NULL; /* Not found */
+}
+
 
 static int asn1c_emit_constraint_tables(arg_t *arg, int got_size);
 static int emit_alphabet_check_loop(arg_t *arg, asn1cnst_range_t *range);
@@ -118,8 +167,6 @@ char *escape_for_c_string(const char *input) {
 
 static void
 emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
-    //OUT("printf(\"Sono dentro\");\n");
-
     if(ct->elements[i]->value->value.string.buf != NULL) {
         //Possibile warning qua per cast non esplicito
         OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
@@ -134,8 +181,6 @@ emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
             OUT("const char *string_pattern =  \"%s\";\n", pattern);
         }
 
-        //Probabile errore per le ""
-
         OUT("regex_t regex;\n");
         OUT("int ret = regcomp(&regex, string_pattern , REG_EXTENDED);\n");
         OUT("if (ret) {\n");
@@ -146,73 +191,10 @@ emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
         OUT("regfree(&regex);\n");
         OUT("if (ret) return -1;\n");
     }
-    // if (ct->elements[i]->value->value.string.buf != NULL) {
-    //     OUT("// --- PCRE2 MATCH START ---\n");
-    //
-    //     // Cast esplicito e copia della stringa
-    //     OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
-    //
-    //     // Inserisci il pattern direttamente come stringa C corretta
-    //     const char *pattern = (const char *)ct->elements[i]->value->value.string.buf;
-    //     char *escaped_pattern = escape_for_c_string(pattern);
-    //     OUT("PCRE2_SPTR pattern = (PCRE2_SPTR)\"%s\";\n", escaped_pattern);
-    //     OUT("PCRE2_SPTR subject = (PCRE2_SPTR)c_string;\n");
-    //
-    //     OUT("int errorcode;\n");
-    //     OUT("PCRE2_SIZE erroffset;\n");
-    //     OUT("pcre2_code *re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, 0, &errorcode, &erroffset, NULL);\n");
-    //     OUT("if (!re) {\n");
-    //     OUT("    PCRE2_UCHAR buffer[256];\n");
-    //     OUT("    pcre2_get_error_message(errorcode, buffer, sizeof(buffer));\n");
-    //     OUT("    fprintf(stderr, \"Regex compilation error: %%s\\n\", buffer);\n");
-    //     OUT("    return -1;\n");
-    //     OUT("}\n");
-    //
-    //     OUT("pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(re, NULL);\n");
-    //
-    //     OUT("int rc = pcre2_match(re, subject, strlen((char *)subject), 0, 0, match_data, NULL);\n");
-    //     OUT("pcre2_match_data_free(match_data);\n");
-    //     OUT("pcre2_code_free(re);\n");
-    //
-    //     OUT("if (rc < 0) return -1;\n");
-    //
-    //     OUT("// --- PCRE2 MATCH END ---\n");
-    // }
-
 }
 
 static void
 emit_pattern_constraint_union(arg_t *arg, asn1p_constraint_t *ct, int i, int j ,int first_pattern) {
-    //OUT("printf(\"Sono dentro\");\n");
-
-    // if(ct->elements[i]->elements[j]->value->value.string.buf != NULL) {
-    //     //Possibile warning qua per cast non esplicito
-    //     if (first_pattern == 0) {
-    //         OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
-    //     }
-    //
-    //     const char *pattern = ct->elements[i]->elements[j]->value->value.string.buf;
-    //     if (first_pattern == 0) {
-    //         OUT("char *string_pattern =  \"%s\";\n", pattern);
-    //         OUT("regex_t regex;\n");
-    //         OUT("int ret = regcomp(&regex, string_pattern , REG_EXTENDED);\n");
-    //     }else {
-    //         OUT("string_pattern =  \"%s\";\n", pattern);
-    //         OUT("ret = regcomp(&regex, string_pattern , REG_EXTENDED);\n");
-    //     }
-    //
-    //     //Probabile errore per le ""
-    //
-    //
-    //
-    //     OUT("if (ret==0) {\n");
-    //     OUT("    union_contains = 1;\n");
-    //     OUT("}\n");
-    //     OUT("\n");
-    //     OUT("ret = regexec(&regex, c_string, 0, NULL, 0);\n");
-    //     OUT("regfree(&regex);\n");
-    //     OUT("if (ret==0) union_contains = 1;\n");
-    // }
     if(ct->elements[i]->elements[j]->value->value.string.buf != NULL) {
         // Possibile warning qua per cast non esplicito
         if (first_pattern == 0) {
@@ -242,27 +224,7 @@ emit_pattern_constraint_union(arg_t *arg, asn1p_constraint_t *ct, int i, int j ,
         OUT("    if (rc >= 0) union_contains = 1;\n");
         OUT("}\n");
     }
-
 }
-
-
-// static void
-// emit_single_value_string_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
-//     if(ct->elements[i]->value->value.string.buf != NULL) {
-//         //Possibile warning qua per cast non esplicito
-//
-//         OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
-//         const char *single_value = ct->elements[i]->value->value.string.buf;
-//         OUT("const char *single_value =  \"%s\";\n", single_value);
-//
-//         OUT("if (strcmp(c_string, single_value) != 0) {\n");
-//         INDENT(+1);
-//         OUT("\t return -1;\n");
-//         OUT("}\n");
-//         INDENT(-1);
-//     }
-// }
-
 
 static void
 emit_single_value_string_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
@@ -337,15 +299,10 @@ emit_single_value_string_constraint_union(arg_t *arg, asn1p_constraint_t *ct, in
 static void
 emit_regex_include(arg_t *arg) {
     int saved_target = arg->target->target;
-    printf("Debug: saved_target = %d, OT_INCLUDES = %d\n", saved_target, OT_INCLUDES);
     REDIR(8);
     OUT("#include <regex.h>\n");
     OUT("#include <string.h>\n");
-    //OUT("#define PCRE2_CODE_UNIT_WIDTH 8\n");
-    //OUT("#include <pcre2.h>\n");
     REDIR(saved_target);
-    printf("Include regex\n");
-
 }
 //Funzione per validazione dei WITH COMPONENTS
 static void
@@ -806,8 +763,8 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
 	 if (etype & ASN_STRING_MASK) {
         //printf("Expression is a string type\n");
 		}
-	r_value=asn1constraint_compute_constraint_range(expr->Identifier, etype, ct, ACT_EL_RANGE,0,0,0);
-	r_size =asn1constraint_compute_constraint_range(expr->Identifier, etype, ct, ACT_CT_SIZE, 0,0,0);
+	r_value=asn1constraint_compute_constraint_range(expr->Identifier, etype, ct, ACT_EL_RANGE, 0, 0, 0);
+	r_size =asn1constraint_compute_constraint_range(expr->Identifier, etype, ct, ACT_CT_SIZE, 0, 0, 0);
 	if(r_value) {
 		if(r_value->incompatible
 		|| r_value->empty_constraint
@@ -899,7 +856,6 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
 		INDENT(+1);
 		OUT("ASN__CTFAIL(app_key, td, sptr,\n");
 		OUT("\t\"%%s: value not given (%%s:%%d)\",\n");
-		OUT("//Sto provando a modificare i Costrain,\n");
 		OUT("\ttd->name, __FILE__, __LINE__);\n");
 		OUT("return -1;\n");
 		INDENT(-1);
@@ -907,32 +863,39 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
 	OUT("\n");
 
     //Parte aggiunta
-	if (ct->type == ACT_CA_SET && ct->elements != NULL) {
-        printf("Number of elements in SET: %d\n", ct->el_count);
+    if (ct->type == ACT_CA_SET && ct->elements != NULL) {
+        bool wcomps_vars_declared = false; // Flag per tracciare la dichiarazione
         for (unsigned int i = 0; i < ct->el_count; i++) {
             //Implementazione del Vincolo pattern
-			if(ct->elements[i]->type == ACT_CT_PATTERN) {
-				 // Reindirizza agli include
-			    emit_regex_include(arg);
+            if(ct->elements[i]->type == ACT_CT_PATTERN) {
+                 // Reindirizza agli include
+                emit_regex_include(arg);
                 emit_pattern_constraint(arg, ct, i);
-			}
+            }
 
             //Implementazione del Vincolo  per single value delle Stringhe
             if(ct->elements[i]->type == ACT_EL_VALUE && etype & ASN_STRING_MASK) {
-               printf("Im in\n");
                 emit_single_value_string_constraint(arg, ct,i);
             }
             if(ct->elements[i]->type == ACT_CT_WCOMPS) {
-                printf("Im in WITH COMPONETS\n");
                 //Gestione del constraint WCOMPONENTS
-                OUT("//PROVA WITH COMPONENTS \n");
                 asn1p_constraint_t *new_ct = ct->elements[i];
-                // Recupero il nome del tipo (AdultPerson)
-                const char *type_name = arg->expr->Identifier;
-                OUT("// Tipo con vincolo: %s\n", type_name);
-                // Creo un puntatore tipizzato alla struttura per accesso diretto ai campi
-                OUT("// Accesso alla struttura tipizzata\n");
-                OUT("const %s_t *typed_struct = (const %s_t *)sptr;\n", type_name, type_name);
+                
+                // Dichiara le variabili solo una volta, alla prima occorrenza
+                if(!wcomps_vars_declared) {
+                    OUT("//PROVA WITH COMPONENTS \n");
+                    // Recupero il nome del tipo (AdultPerson)
+                    char *type_name = asn1c_mangle_name(arg->expr->Identifier);
+                    OUT("// Tipo con vincolo: %s\n", type_name);
+                    // Creo un puntatore tipizzato alla struttura per accesso diretto ai campi
+                    OUT("// Accesso alla struttura tipizzata\n");
+                    OUT("const %s_t *typed_struct = (const %s_t *)sptr;\n", type_name, type_name);
+                    // Aggiungi una variabile per facilitare l'elaborazione successiva
+                    OUT("// Memorizzazione del tipo per uso successivo\n");
+                    OUT("const char *constraint_type = \"%s\";\n", type_name);
+                    free(type_name);
+                    wcomps_vars_declared = true;
+                }
 
                 // Recupero la struttura del tipo corrente per estrarne i membri
                 asn1p_expr_t *type_def = arg->expr;
@@ -951,92 +914,110 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
             }
 
             if(component_name) {
-                printf("Componente con vincolo: %s\n", component_name);
+                /*
+                 * Find the component's definition to check if it's OPTIONAL.
+                 * This is crucial because only optional members are pointers
+                 * and can be checked for presence with a simple if(member).
+                 */
+                asn1p_expr_t *comp_expr = asn1f_find_component_by_name(arg->expr, component_name);
+                int is_optional = (comp_expr && (comp_expr->marker.flags & EM_OPTIONAL));
 
                 // Genera codice per l'accesso e la verifica del componente
-                OUT("// Verifica del componente: %s\n", component_name);
+                OUT("// Verifica del componente: %s (optional: %s)\n", component_name, is_optional ? "yes" : "no");
                 // Controlla la presenza del campo (PRESENT o ABSENT)
                 if(new_ct->elements[j]->presence == ACPRES_PRESENT) {
-                    OUT("if(!typed_struct->%s) {\n", component_name);
-                    OUT("    ASN__CTFAIL(app_key, td, sptr,\n");
-                    OUT("        \"%%s: Component '%s' deve essere presente\",\n", component_name);
-                    OUT("        td->name);\n");
-                    OUT("    return -1;\n");
-                    OUT("}\n");
+                    if(is_optional) {
+                        OUT("if(!typed_struct->%s) {\n", component_name);
+                        OUT("    ASN__CTFAIL(app_key, td, sptr,\n");
+                        OUT("        \"%%s: Component '%s' must be present\",\n", component_name);
+                        OUT("        td->name);\n");
+                        OUT("    return -1;\n");
+                        OUT("}\n");
+                    } else {
+                        OUT("/* Component %s is mandatory, presence is implicit */\n", component_name);
+                    }
                 } else if(new_ct->elements[j]->presence == ACPRES_ABSENT) {
-                    OUT("if(typed_struct->%s) {\n", component_name);
-                    OUT("    ASN__CTFAIL(app_key, td, sptr,\n");
-                    OUT("        \"%%s: Component '%s' deve essere assente\",\n", component_name);
-                    OUT("        td->name);\n");
-                    OUT("    return -1;\n");
-                    OUT("}\n");
+                    if(is_optional) {
+                        OUT("if(typed_struct->%s) {\n", component_name);
+                        OUT("    ASN__CTFAIL(app_key, td, sptr,\n");
+                        OUT("        \"%%s: Component '%s' must be absent\",\n", component_name);
+                        OUT("        td->name);\n");
+                        OUT("    return -1;\n");
+                        OUT("}\n");
+                    } else {
+                        OUT("/* Component %s is mandatory, cannot be absent */\n", component_name);
+                        OUT("ASN__CTFAIL(app_key, td, sptr, \"%%s: Mandatory component '%s' cannot be absent\", td->name);\n", component_name);
+                        OUT("return -1;\n");
+                    }
                 }
 
                 // Se ci sono ulteriori vincoli sul componente
                 if(new_ct->elements[j]->el_count > 0) {
                     OUT("// Vincoli aggiuntivi sul componente %s\n", component_name);
-                    OUT("if(typed_struct->%s) {\n", component_name);
+                    if(is_optional) {
+                        OUT("if(typed_struct->%s) {\n", component_name);
+                        INDENT(+1);
+                    }
 
                     // Chiamata alla funzione per generare i controlli dei vincoli
                     emit_component_constraint_checks(arg, new_ct->elements[j], component_name);
 
-                    OUT("}\n");
+                    if(is_optional) {
+                        INDENT(-1);
+                        OUT("}\n");
+                    }
                 }
             }
         }
-                    printf("Element %d type: %s\n", j,
-                           asn1p_constraint_type2str(new_ct->elements[j]->type));
+                    // printf("Element %d type: %s\n", j,
+                    //        asn1p_constraint_type2str(new_ct->elements[j]->type));
                 }
-                // Aggiungi una variabile per facilitare l'elaborazione successiva
-                OUT("// Memorizzazione del tipo per uso successivo\n");
-                OUT("const char *constraint_type = \"%s\";\n", type_name);
             }
             int value_found = 0;
             int first_string = 0;
             int first_pattern = 0;
             //Implementazione del Vincolo per single value con Union
+
+            
             if(ct->elements[i]->type == ACT_CA_UNI) {
                 // Gestione del constraint UNION
-                printf("Constraint UNION found\n");
+                // printf("Constraint UNION found\n");
+                if(ct->elements[i]->el_count > 0) {
+                    OUT("int union_contains = 0;\n");
+                }
                 for (unsigned int j = 0; j < ct->elements[i]->el_count; j++) {
-                    printf("Element %d type: %s\n", j,
-                           asn1p_constraint_type2str(ct->elements[i]->elements[j]->type));
+                    // printf("Element %d type: %s\n", j,
+                    //        asn1p_constraint_type2str(ct->elements[i]->elements[j]->type));
                     if(ct->elements[i]->elements[j]->type == ACT_EL_VALUE && etype & ASN_STRING_MASK) {
                         if (value_found == 0) {
                             value_found = 1;
-                            OUT("int union_contains = 0;\n");
                         }
                         emit_single_value_string_constraint_union(arg, ct,i,j, first_string);
                         first_string++;
                     }
 
                     if(ct->elements[i]->elements[j]->type == ACT_CT_PATTERN) {
-                        printf("DEBUG\n");
+                        // printf("DEBUG\n");
                         if (value_found == 0) {
                             value_found = 1;
-                            OUT("int union_contains = 0;\n");
                         }
                         emit_regex_include(arg);
                         emit_pattern_constraint_union(arg, ct,i,j, first_pattern);
                         first_pattern++;
                     }
-                    if (j == ct->elements[i]->el_count - 1) {
-                        OUT("if (union_contains == 0) {\n");
-                        INDENT(+1);
-                        OUT("\t return -1;\n");
-                        OUT("}\n");
-                        INDENT(-1);
-                    }
                 }
-
+                if (value_found) {
+                    OUT("if (union_contains == 0) {\n");
+                    INDENT(+1);
+                    OUT("ASN__CTFAIL(app_key, td, sptr,\n");
+                    OUT("\t\"%%s: constraint failed (%%s:%%d)\",\n");
+                    OUT("\ttd->name, __FILE__, __LINE__);\n");
+                    OUT("return -1;\n");
+                    INDENT(-1);
+                    OUT("}\n");
+                }
             }
-
-
-            // printf("Element %d type: %s\n", i,
-            //        asn1p_constraint_type2str(ct->elements[i]->type));
-            // printf("Constrain %d type: %d\n", i,
-            //        ct->elements[i]->type);
-
+            
         }
     }
 
@@ -1436,7 +1417,6 @@ emit_range_comparison_code(asn1cnst_range_t *range, const char *varname,
                            asn1c_integer_t natural_start,
                            asn1c_integer_t natural_stop) {
     abuf *ab = abuf_new();
-	//OUT("Sto provando a modificare i Costrain dei numeri,\n");
     if(range->el_count == 0) {
         int ignore_left =
             (range->left.type == ARE_MIN)
@@ -1468,14 +1448,14 @@ emit_range_comparison_code(asn1cnst_range_t *range, const char *varname,
             asn1cnst_range_t *r = range->elements[i];
 
             abuf *rec = emit_range_comparison_code(r, varname, natural_start,
-                                                   natural_stop);
+                           natural_stop);
             if(rec->length) {
                 if(ab->length) {
                     abuf_str(ab, " || ");
                 }
                 abuf_str(ab, "(");
                 abuf_buf(ab, rec);
-                abuf_str(ab, ")");
+                               abuf_str(ab, ")");
             } else {
                 /* Ignore this part */
             }
@@ -1544,17 +1524,16 @@ emit_size_determination_code(arg_t *arg, asn1p_expr_type_e etype) {
 static int
 emit_value_determination_code(arg_t *arg, asn1p_expr_type_e etype, asn1cnst_range_t *r_value) {
 
-	switch(etype) {
-	case ASN_BASIC_INTEGER:
-	case ASN_BASIC_ENUMERATED:
-		OUT("//Sto provando a modificare i Costrain dei numeri,\n");
-		if(asn1c_type_fits_long(arg, arg->expr) == FL_FITS_UNSIGN) {
-			OUT("value = *(const unsigned long *)sptr;\n");
+    switch(etype) {
+    case ASN_BASIC_INTEGER:
+    case ASN_BASIC_ENUMERATED:
+        if(asn1c_type_fits_long(arg, arg->expr) == FL_FITS_UNSIGN) {
+            OUT("value = *(const unsigned long *)sptr;\n");
 
-		} else if(asn1c_type_fits_long(arg, arg->expr) != FL_NOTFIT) {
-			OUT("value = *(const long *)sptr;\n");
-		} else {
-			/*
+        } else if(asn1c_type_fits_long(arg, arg->expr) != FL_NOTFIT) {
+            OUT("value = *(const long *)sptr;\n");
+        } else {
+            /*
 			 * In some cases we can explore our knowledge of
 			 * underlying INTEGER_t->buf format.
 			 */
