@@ -103,3 +103,4 @@ doc/docsrc/*.xdv
 #code coverage
 *.gcno
 *.gcda
+asn1c/preprocessed_temp/Constrain.asn
