@@ -184,6 +184,10 @@ emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
         OUT("regex_t regex;\n");
         OUT("int ret = regcomp(&regex, string_pattern , REG_EXTENDED);\n");
         OUT("if (ret) {\n");
+        OUT("ASN__CTFAIL(app_key, td, sptr,\n");
+        OUT("\t\"%%s: constraint failed (%%s:%%d)\",\n");
+        OUT("\ttd->name, __FILE__, __LINE__);\n");
+        OUT("return -1;\n");
         OUT("    return -1;\n");
         OUT("}\n");
         OUT("\n");
@@ -875,6 +879,7 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
 
             //Implementazione del Vincolo  per single value delle Stringhe
             if(ct->elements[i]->type == ACT_EL_VALUE && etype & ASN_STRING_MASK) {
+				emit_regex_include(arg);
                 emit_single_value_string_constraint(arg, ct,i);
             }
             if(ct->elements[i]->type == ACT_CT_WCOMPS) {
@@ -991,6 +996,7 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
                     if(ct->elements[i]->elements[j]->type == ACT_EL_VALUE && etype & ASN_STRING_MASK) {
                         if (value_found == 0) {
                             value_found = 1;
+							emit_regex_include(arg);
                         }
                         emit_single_value_string_constraint_union(arg, ct,i,j, first_string);
                         first_string++;

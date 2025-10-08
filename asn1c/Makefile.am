@@ -21,4 +21,5 @@ bin_PROGRAMS = asn1c
 
 asn1c_SOURCES = \
     asn1c.c     \
-    preprocessor.c
+    preprocessor.c \
+    import.c
