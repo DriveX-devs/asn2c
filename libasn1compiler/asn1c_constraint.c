@@ -26,36 +26,6 @@ asn1c_mangle_name(const char *name) {
     return mangled_name;
 }
 
-/*
- * Find a component of a structured type by its name.
- * (Local implementation to avoid linker errors).
- */
-static asn1p_expr_t *
-asn1f_find_component_by_name(asn1p_expr_t *struct_expr,
-                             const char *comp_name) {
-    asn1p_expr_t *component;
-
-    if(!struct_expr || !comp_name)
-        return NULL;
-
-    /* The expression must be a constructed type */
-    if(struct_expr->expr_type != ASN_CONSTR_SEQUENCE &&
-       struct_expr->expr_type != ASN_CONSTR_SET &&
-       struct_expr->expr_type != ASN_CONSTR_CHOICE &&
-       struct_expr->expr_type != ASN_CONSTR_SEQUENCE_OF &&
-       struct_expr->expr_type != ASN_CONSTR_SET_OF) {
-        return NULL;
-    }
-
-    TQ_FOR(component, &struct_expr->members, next) {
-        if(component->Identifier && strcmp(component->Identifier, comp_name) == 0) {
-            return component;
-        }
-    }
-
-    return NULL; /* Not found */
-}
-
 
 static int asn1c_emit_constraint_tables(arg_t *arg, int got_size);
 static int emit_alphabet_check_loop(arg_t *arg, asn1cnst_range_t *range);
@@ -67,7 +37,7 @@ static abuf *emit_range_comparison_code(asn1cnst_range_t *range,
                                           asn1c_integer_t natural_start,
                                           asn1c_integer_t natural_stop);
 static int native_long_sign(arg_t *arg, asn1cnst_range_t *r);	/* -1, 0, 1 */
-static void emit_component_constraint_checks(arg_t *arg, asn1p_constraint_t *comp_ct, char *component_name);
+
 static int
 ulong_optimization(arg_t *arg, asn1p_expr_type_e etype, asn1cnst_range_t *r_size,
 						asn1cnst_range_t *r_value)
@@ -333,9 +303,7 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
 
 	//Gives back the base type on which the constraint is applied
 	etype = _find_terminal_type(arg);
-	 if (etype & ASN_STRING_MASK) {
-        //printf("Expression is a string type\n");
-		}
+
 	r_value=asn1constraint_compute_constraint_range(expr->Identifier, etype, ct, ACT_EL_RANGE, 0, 0, 0);
 	r_size =asn1constraint_compute_constraint_range(expr->Identifier, etype, ct, ACT_CT_SIZE, 0, 0, 0);
 	if(r_value) {
