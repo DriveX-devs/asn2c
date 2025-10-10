@@ -6,7 +6,7 @@
 #include <ctype.h>
 #include <glob.h>
 
-#include "import.h" // Includiamo il nostro nuovo header
+#include "import.h" // include our new dependency management library
 
 #define MAX_MODULES 100
 

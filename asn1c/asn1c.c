@@ -68,7 +68,6 @@ int run_preprocessor(int num_input_files, char **input_files,
 
 int
 main(int ac, char **av) {
-    fprintf(stdout, "Test message prova\n");
 
     enum asn1p_flags asn1_parser_flags = A1P_NOFLAGS;
     enum asn1f_flags asn1_fixer_flags = A1F_NOFLAGS;

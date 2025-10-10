@@ -52,15 +52,15 @@ ulong_optimization(arg_t *arg, asn1p_expr_type_e etype, asn1cnst_range_t *r_size
 char *escape_for_c_string(const char *input) {
     if (input == NULL) return NULL;
 
-    // Primo passaggio: calcola la lunghezza necessaria per la stringa di output.
+    // First pass: calculate the required length for the output string.
     size_t required_len = 0;
     for (const char *src = input; *src; ++src) {
-        if (*src == '\\' && *(src + 1) == 'd') {
-            required_len += 5; // Per "[0-9]"
-            src++;             // Salta 'd'
-        } else if (*src == '\\' && *(src + 1) == 'w') {
-            required_len += 11; // Per "[a-zA-Z0-9]"
-            src++;              // Salta 'w'
+        if (*src == '\\' && *(src + 1) == 'd') { // handle of case \d to [0-9]
+            required_len += 5; 
+            src++;             
+        } else if (*src == '\\' && *(src + 1) == 'w') { // handle of case \w to [a-zA-Z0-9]
+            required_len += 11; 
+            src++;              
         } else if (*src == '#') {
             const char *p = src + 1;
             if (isdigit((unsigned char)*p)) {
@@ -81,10 +81,10 @@ char *escape_for_c_string(const char *input) {
         }
     }
 
-    char *escaped = malloc(required_len + 1); // +1 per il terminatore nullo
+    char *escaped = malloc(required_len + 1); // +1 for null terminator
     if (!escaped) return NULL;
 
-    // Secondo passaggio: costruisce la stringa con l'escape.
+    // Second pass: construct the escaped string.
     char *dst = escaped;
     for (const char *src = input; *src; ++src) {
         if (*src == '\\' && *(src + 1) == 'd') {
@@ -93,7 +93,7 @@ char *escape_for_c_string(const char *input) {
             *dst++ = '-';
             *dst++ = '9';
             *dst++ = ']';
-            src++; // Salta 'd'
+            src++; // Skip 'd'
         } else if (*src == '\\' && *(src + 1) == 'w') {
             *dst++ = '[';
             *dst++ = 'a';
@@ -106,7 +106,7 @@ char *escape_for_c_string(const char *input) {
             *dst++ = '-';
             *dst++ = '9';
             *dst++ = ']';
-            src++; // Salta 'w'
+            src++; // Skip 'w'
         } else if (*src == '#') {
             const char *p = src + 1;
             if (isdigit((unsigned char)*p)) {
@@ -138,16 +138,16 @@ char *escape_for_c_string(const char *input) {
 static void
 emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
     if(ct->elements[i]->value->value.string.buf != NULL) {
-        //Possibile warning qua per cast non esplicito
+        
         OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
         const char *pattern = (const char *)ct->elements[i]->value->value.string.buf;
         char *escaped_pattern = escape_for_c_string(pattern);
 
         if (escaped_pattern) {
             OUT("const char *string_pattern =  \"%s\";\n", escaped_pattern);
-            free(escaped_pattern); // Libera la memoria dopo averla usata
+            free(escaped_pattern); // Free memory after use
         } else {
-            // Se l'escape fallisce, usa il pattern originale ma potrebbe non funzionare
+            // If escaping fails, use the original pattern but it may not work
             OUT("const char *string_pattern =  \"%s\";\n", pattern);
         }
 
@@ -170,33 +170,41 @@ emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
 static void
 emit_pattern_constraint_union(arg_t *arg, asn1p_constraint_t *ct, int i, int j ,int first_pattern) {
     if(ct->elements[i]->elements[j]->value->value.string.buf != NULL) {
-        // Possibile warning qua per cast non esplicito
+        
+
+		// If it's the first pattern in the union, declare the variables only once.
         if (first_pattern == 0) {
             OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
-            OUT("PCRE2_SPTR subject = (PCRE2_SPTR)c_string;\n");
-            OUT("int errorcode;\n");
-            OUT("PCRE2_SIZE erroffset;\n");
-            OUT("pcre2_code *re;\n");
-            OUT("pcre2_match_data *match_data;\n");
+            OUT("regex_t regex;\n");
+            OUT("int ret;\n");
         }
 
         const char *pattern = ct->elements[i]->elements[j]->value->value.string.buf;
         char *escaped_pattern = escape_for_c_string(pattern);
-        if (first_pattern == 0) {
-            OUT("PCRE2_SPTR pattern = (PCRE2_SPTR)\"%s\";\n", escaped_pattern);
-            OUT("re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, 0, &errorcode, &erroffset, NULL);\n");
-        } else {
-            OUT("pattern = (PCRE2_SPTR)\"%s\";\n", escaped_pattern);
-            OUT("re = pcre2_compile(pattern, PCRE2_ZERO_TERMINATED, 0, &errorcode, &erroffset, NULL);\n");
-        }
 
-        OUT("if (re) {\n");
-        OUT("    match_data = pcre2_match_data_create_from_pattern(re, NULL);\n");
-        OUT("    int rc = pcre2_match(re, subject, strlen((char *)subject), 0, 0, match_data, NULL);\n");
-        OUT("    pcre2_match_data_free(match_data);\n");
-        OUT("    pcre2_code_free(re);\n");
-        OUT("    if (rc >= 0) union_contains = 1;\n");
-        OUT("}\n");
+        if (escaped_pattern) {
+            
+			// Execute the check only if a previous pattern has not already succeeded.
+            OUT("if (!union_contains) {\n");
+            INDENT(+1);
+            OUT("const char *pattern = \"%s\";\n", escaped_pattern);
+            OUT("ret = regcomp(&regex, pattern, REG_EXTENDED);\n");
+            OUT("if (ret == 0) {\n");
+            INDENT(+1);
+            OUT("ret = regexec(&regex, c_string, 0, NULL, 0);\n");
+            OUT("if (ret == 0) {\n");
+            INDENT(+1);
+            // If the regex matches, set union_contains to 1.
+            OUT("union_contains = 1;\n");
+            INDENT(-1);
+            OUT("}\n");
+            OUT("regfree(&regex);\n");
+            INDENT(-1);
+            OUT("}\n");
+            INDENT(-1);
+            OUT("}\n");
+            free(escaped_pattern);
+        }
     }
 }
 
@@ -205,13 +213,11 @@ emit_single_value_string_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
     if(ct->elements[i]->value->value.string.buf != NULL) {
         const char *raw_constraint_value = (const char *)ct->elements[i]->value->value.string.buf;
         char *escaped_constraint_value = escape_for_c_string(raw_constraint_value);
-        // La free di escaped_constraint_value (variabile C di questa funzione)
-        // deve essere fatta alla fine di questa funzione.
 
-        // Nome del campo per i messaggi di errore (se disponibile)
+		// Field name for error messages (if available)
         const char *field_name_for_error = (arg->expr && arg->expr->Identifier) ? arg->expr->Identifier : "field";
 
-        // Genera codice C per la validazione
+        // Generate C code for validation
         OUT("            char *actual_runtime_value = strndup((const char *)st->buf, st->size);\n");
         OUT("            if(!actual_runtime_value) {\n");
         INDENT(+1);
@@ -233,14 +239,14 @@ emit_single_value_string_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
             OUT("            }\n");
             OUT("            free(actual_runtime_value);\n");
         } else {
-            // Errore durante l'escape del valore del vincolo. Questo è un problema di asn1c.
-            // Genera codice per liberare actual_runtime_value e fallire.
+			// If there was an error escaping the constraint value, this is an asn1c internal issue.
+			// Generate code to free actual_runtime_value and fail.
             OUT("            ASN__CTFAIL(app_key, td, sptr, \"%%%%s: internal error escaping constraint value for component '%s' (%%%%s:%%%%d)\", td->name, __FILE__, __LINE__);\n", field_name_for_error);
             OUT("            free(actual_runtime_value);\n");
             OUT("            return -1;\n");
         }
 
-        // Libera la memoria allocata da escape_for_c_string in questa funzione C (emit_single_value_string_constraint)
+        // Free the memory allocated by escape_for_c_string in this C function (emit_single_value_string_constraint)
         if(escaped_constraint_value) {
             free(escaped_constraint_value);
         }
@@ -250,7 +256,7 @@ emit_single_value_string_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
 static void
 emit_single_value_string_constraint_union(arg_t *arg, asn1p_constraint_t *ct, int i, int j, int first_string) {
     if(ct->elements[i]->elements[j]->value->value.string.buf != NULL) {
-        //Possibile warning qua per cast non esplicito
+       
         if (first_string == 0) {
             OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
         }
@@ -403,18 +409,19 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
 	OUT("}\n");
 	OUT("\n");
 
-    //Parte aggiunta
+    // My implementation for handling constraints on strings
     if (ct->type == ACT_CA_SET && ct->elements != NULL) {
-        bool wcomps_vars_declared = false; // Flag per tracciare la dichiarazione
+        
         for (unsigned int i = 0; i < ct->el_count; i++) {
-            //Implementazione del Vincolo pattern
+            // Pattern constraint implementation
             if(ct->elements[i]->type == ACT_CT_PATTERN) {
-                 // Reindirizza agli include
+                 // Include regex headers
                 emit_regex_include(arg);
+				// Generate code for pattern constraint
                 emit_pattern_constraint(arg, ct, i);
             }
 
-            //Implementazione del Vincolo  per single value delle Stringhe
+            // Single value string constraint implementation
             if(ct->elements[i]->type == ACT_EL_VALUE && etype & ASN_STRING_MASK) {
 				emit_regex_include(arg);
                 emit_single_value_string_constraint(arg, ct,i);
@@ -422,18 +429,17 @@ asn1c_emit_constraint_checking_code(arg_t *arg) {
             int value_found = 0;
             int first_string = 0;
             int first_pattern = 0;
-            //Implementazione del Vincolo per single value con Union
+            // Single value constraint implementation with Union
 
-            
             if(ct->elements[i]->type == ACT_CA_UNI) {
-                // Gestione del constraint UNION
-                // printf("Constraint UNION found\n");
+                // Union constraint handling
+               
                 if(ct->elements[i]->el_count > 0) {
                     OUT("int union_contains = 0;\n");
                 }
                 for (unsigned int j = 0; j < ct->elements[i]->el_count; j++) {
-                    // printf("Element %d type: %s\n", j,
-                    //        asn1p_constraint_type2str(ct->elements[i]->elements[j]->type));
+                    
+                    
                     if(ct->elements[i]->elements[j]->type == ACT_EL_VALUE && etype & ASN_STRING_MASK) {
                         if (value_found == 0) {
                             value_found = 1;

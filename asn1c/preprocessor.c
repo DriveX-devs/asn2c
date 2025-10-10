@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <glob.h>
 
-#include "import.h" // Includiamo la nostra nuova libreria
+#include "import.h" // Include our new dependency management library
 
 #define MAX_LINE 1024
 #define MAX_ENTRIES 64
@@ -36,9 +36,6 @@ int match_line(const char *line, const char *pattern, regmatch_t *matches, int n
 void generate_alias(const char *component, char *alias, size_t alias_size) {
     snprintf(alias, alias_size, "Alias%c%s", toupper(component[0]), component + 1);
 }
-
-// NOTA: La funzione preprocess_imports non è più necessaria qui,
-// perché la sua logica è ora gestita da generate_modified_content in Testimport.c
 
 bool process_file_for_choice(const char *filename, const char *output_dir, bool debug_mode) {
     entry_count = 0;
@@ -70,6 +67,7 @@ bool process_file_for_choice(const char *filename, const char *output_dir, bool 
     char parent_type_name[128] = {0};
     bool transform_needed = false;
 
+    // Pass 1: Scan for a CHOICE block with "WITH COMPONENTS..."
     printf("[CHOICE] Pass 1: Scanning for a CHOICE block with WITH COMPONENTS...\n");
     while(true) {
         const char *block_start_pattern = "([A-Za-z0-9-]+)[[:space:]]*::=[[:space:]]*([A-Za-z0-9-]+)[[:space:]]*\\(";
@@ -140,10 +138,10 @@ bool process_file_for_choice(const char *filename, const char *output_dir, bool 
     if (!transform_needed) {
         printf("[INFO] No CHOICE transformation needed for this file.\n");
         free(content);
-        return false; // Nessuna modifica per il CHOICE
+        return false; // No modification needed for CHOICE
     }
 
-    // --- SECONDO PASSAGGIO: Scrivere il nuovo file ---
+    // --- PASS 2: Write the new file ---
     const char *base_name = strrchr(filename, '/');
     if (base_name) base_name++;
     else base_name = filename;
@@ -195,12 +193,12 @@ int run_preprocessor(int num_input_files, const char **input_files, const char *
         return 0;
     }
 
-    // --- FASE 1: Esegui il controllo delle dipendenze e la pulizia degli import ---
-    // Questa funzione ora legge i file originali, esegue l'analisi, scrive
-    // i file nella directory di output e popola l'array processed_files.
+    // --- PHASE 1: Perform dependency check and import cleanup ---
+    // This function reads the original files, performs the analysis, writes
+    // the files to the output directory, and populates the processed_files array.
     run_dependency_check_and_modify(num_input_files, input_files, output_dir, &processed_files, &processed_files_count);
 
-    // --- FASE 2: Esegui le trasformazioni del CHOICE sui file appena generati ---
+    // --- PHASE 2: Perform CHOICE transformations on the newly generated files ---
     printf("\n--- [CHOICE TRANSFORM] Starting second preprocessing phase on generated files ---\n");
     
     for (int i = 0; i < processed_files_count; i++) {
@@ -211,7 +209,7 @@ int run_preprocessor(int num_input_files, const char **input_files, const char *
         printf("--- Finished CHOICE processing: %s ---\n", processed_files[i]);
     }
     
-    // Stampa il riepilogo finale
+    // Print the final summary
     printf("\n--- PREPROCESSOR SUMMARY ---\n");
     printf("Total files analyzed and processed: %d\n", processed_files_count);
     printf("Total files modified by CHOICE transform: %d\n", modified_files_count);
