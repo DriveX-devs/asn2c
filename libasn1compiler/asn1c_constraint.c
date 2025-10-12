@@ -49,7 +49,7 @@ ulong_optimization(arg_t *arg, asn1p_expr_type_e etype, asn1cnst_range_t *r_size
 }
 
 
-char *escape_for_c_string(const char *input) {
+char *escape_for_c_string_pattern(const char *input) {
     if (input == NULL) return NULL;
 
     // First pass: calculate the required length for the output string.
@@ -134,6 +134,38 @@ char *escape_for_c_string(const char *input) {
     return escaped;
 }
 
+char *escape_for_c_string(const char *input) {
+    if (input == NULL) return NULL;
+
+    // First pass: calculate the required length for the output string.
+    size_t required_len = 0;
+    for (const char *src = input; *src; ++src) {
+        if (*src == '\\' || *src == '"') {
+            required_len += 2; // For "\\" or "\""
+        } else {
+            required_len += 1;
+        }
+    }
+
+    char *escaped = malloc(required_len + 1); // +1 for null terminator
+    if (!escaped) return NULL;
+
+    // Second pass: construct the escaped string.
+    char *dst = escaped;
+    for (const char *src = input; *src; ++src) {
+        if (*src == '\\') {
+            *dst++ = '\\';
+            *dst++ = '\\';
+        } else if (*src == '"') {
+            *dst++ = '\\';
+            *dst++ = '"';
+        } else {
+            *dst++ = *src;
+        }
+    }
+    *dst = '\0';
+    return escaped;
+}
 
 static void
 emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
@@ -141,7 +173,7 @@ emit_pattern_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
         
         OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
         const char *pattern = (const char *)ct->elements[i]->value->value.string.buf;
-        char *escaped_pattern = escape_for_c_string(pattern);
+        char *escaped_pattern = escape_for_c_string_pattern(pattern);
 
         if (escaped_pattern) {
             OUT("const char *string_pattern =  \"%s\";\n", escaped_pattern);
@@ -180,7 +212,7 @@ emit_pattern_constraint_union(arg_t *arg, asn1p_constraint_t *ct, int i, int j ,
         }
 
         const char *pattern = ct->elements[i]->elements[j]->value->value.string.buf;
-        char *escaped_pattern = escape_for_c_string(pattern);
+        char *escaped_pattern = escape_for_c_string_pattern(pattern);
 
         if (escaped_pattern) {
             
@@ -256,23 +288,26 @@ emit_single_value_string_constraint(arg_t *arg, asn1p_constraint_t *ct, int i) {
 static void
 emit_single_value_string_constraint_union(arg_t *arg, asn1p_constraint_t *ct, int i, int j, int first_string) {
     if(ct->elements[i]->elements[j]->value->value.string.buf != NULL) {
-       
+        const char *raw_value = (const char *)ct->elements[i]->elements[j]->value->value.string.buf;
+        char *escaped_value = escape_for_c_string(raw_value);
+
+        if(!escaped_value) {
+            /* Failed to escape, can't generate a valid check */
+            return;
+        }
+
         if (first_string == 0) {
             OUT("const char *c_string = strndup((const char *)st->buf, st->size);\n");
-        }
-        char *single_value = ct->elements[i]->elements[j]->value->value.string.buf;
-        if (first_string == 0) {
-            OUT("char *single_value =  \"%s\";\n", single_value);
-        }else {
-            OUT(" single_value =  \"%s\";\n", single_value);
+            OUT("if (strcmp(c_string, \"%s\") == 0) {\n", escaped_value);
+        } else {
+            OUT("} else if (strcmp(c_string, \"%s\") == 0) {\n", escaped_value);
         }
 
-        OUT("if (strcmp(c_string, single_value) == 0) {\n");
         INDENT(+1);
-        OUT("\t union_contains = 1;\n");
-        OUT("}\n");
+        OUT("union_contains = 1;\n");
         INDENT(-1);
 
+        free(escaped_value);
     }
 }
 
