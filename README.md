@@ -103,18 +103,24 @@ whether a particular syntactic construction is properly supported
 by the compiler.
 
     asn1c -EF <module-to-test.asn1>             # Check semantic validity
+# Difference from asn1c
+
+asn2c is a branched version of asn1c, designed to compile the new IEEE 1609.2.1 ASN.1 files
+that were not initially supported by asn1c.
+asn2c include a verbose way to check the dependencies of the ASN.1 files processed.
 
 # Model of operation
 
-The asn1c compiler works by processing the ASN.1 module specifications
+The asn2c compiler works by processing the ASN.1 module specifications
 in several stages:
-
-1. During the first stage, the ASN.1 file is parsed.
+1. During the first stage, the preproccessing layer analyze all the ASN.1 files and
+    and checks for dependencies or for not supported structures.
+2. During the second stage, the ASN.1 file is parsed.
    (Parsing produces an ASN.1 syntax tree for the subsequent levels)
-2. During the second stage, the syntax tree is "fixed".
+3. During the third stage, the syntax tree is "fixed".
    (Fixing is a process of checking the tree for semantic errors,
    accompanied by the tree transformation into the canonical form)
-3. During the third stage, the syntax tree is compiled into the target language.
+4. During the fourth stage, the syntax tree is compiled into the target language.
 
 There are several command-line options reserved for printing the results
 after each stage of operation:
