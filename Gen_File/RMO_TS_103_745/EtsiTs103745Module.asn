@@ -1,0 +1,165 @@
+--! @brief Specification of the Module ETSI TS 103 745
+--! Latest version available at @url https://forge.etsi.org/rep/ITS/asn1/rmo_ts103745
+
+EtsiTs103745Module{
+--! Awaiting OK form WG1.
+itu-t (0) identified-organization (4) etsi (0) itsDomain (5) rtJtfir(9) rmoGeofencing (103745) major-version-1 (1) minor-version-1 (1)
+}
+
+DEFINITIONS AUTOMATIC TAGS ::=
+
+BEGIN
+
+IMPORTS 
+
+--! @brief Include ETSI-ITS-CDD
+--! Include references from @url https://forge.etsi.org/rep/ITS/asn1/cdd_ts102894_2/-/blob/V2.2.1/ETSI-ITS-CDD.asn
+GeoPositionWoAltitude, StandardLength2B, InterferenceManagementChannel, TimestampIts, InterferenceManagementZoneType, EllipticalShape
+FROM ETSI-ITS-CDD
+{itu-t (0) identified-organization (4) etsi (0) itsDomain (5) wg1 (1) 102894 cdd (2) major-version-4 (4) minor-version-1 (1)}
+WITH SUCCESSORS
+;
+
+--! @brief RmoMap
+--! This includes information relevant for all Rmo zones applicable for a given sharing situation
+RmoMap ::=  SEQUENCE OF RmoZone 
+  
+/**
+* This DF includes information relevant for a specific RmoZone, i.e. applicability conditions and an array of applicable restricted modes of operation..
+*
+* If the data object represents a data frame, all elements within the data frame
+* should be described using @param or @field. One @param or @field per attribute:
+*
+* @field itsStationType: if present, the RMOs in the RMO zone are only applicable to the type of devices referred to by this itsStationType component. If absent, the RMOs apply to all type of devices.
+*
+* @field interfererChannel: restricts the applicability of the rmoZone to RITS-S using the channel specified by interfererChannel or an overlapping channel. When present, only stations operating on this channel are subject to this rmo. When absent, applicable to stations no matter the operating channel.
+*
+* @filed rmoRegionIdentifier: identifies the geographic region where the RMO(s) apply.
+*
+* @field rmoActivationDate: specifies the date after which the RMO(s) apply.
+*
+* @field sequenceOfRmo: contains a sequence of structure of type Rmo. It consists of a list of RMOs. Devices targeted by the RMO zone shall apply at least one of the listed RMO.
+*
+* @field interferenceManagementZoneType: defines the type of an interference management zone.
+*
+*/
+RmoZone ::= SEQUENCE { 
+    itsStationType                              ItsStationType OPTIONAL,
+    interfererChannel       					          InterferenceManagementChannel OPTIONAL,
+    rmoRegionIdentifier                         RmoRegionIdentifier,
+    rmoActivationDate                           TimestampIts,
+	  rmoExpiryDate                               TimestampIts OPTIONAL,
+    sequenceOfRmo                               SequenceOfRmo,
+	  interferenceManagementZoneType              InterferenceManagementZoneType OPTIONAL,
+    ...
+  }
+
+--! @brief SequenceOfRmo
+--! This is an array of applicable restricted modes of operation. 
+SequenceOfRmo ::=  SEQUENCE OF Rmo
+
+/**
+* This DF specifies a restriction applicable to a given RmoZone.
+*
+* If the data object represents a data frame, all elements within the data frame
+* should be described using @param or @field. One @param or @field per attribute:
+*
+* @field rmoClass: specifies the type of restriction applicable, e.g. eirp.
+*
+* @field restrictedChannel: restricts the application of the RMO to only the frequency range specified by this structure. If absent, the restriction applies to all channels.
+*
+* @field limit: specifies a limit for RMOs using valued restriction class (e.g. an eirp limit). The interpretation of the limit is specified in TS103745.
+*
+*/
+Rmo ::= SEQUENCE {
+    rmoClass                  RmoClass,
+	  restrictedChannel         InterferenceManagementChannel OPTIONAL,
+	  limit                     INTEGER (-2048..2047) OPTIONAL,
+    ...
+  }
+
+RmoClass ::= ENUMERATED { 
+	  noTx(0),
+    eirp(1),
+	  allowedOnPeriods(2),	
+    ...
+  }
+
+--! @brief RmoRegionIdentifier uniquely identifies a RmoRegion, including uniqueness over time.
+RmoRegionIdentifier ::= INTEGER (2..MAX)
+
+/**
+* This DF defines geographic region, represented by its identifier and a geographic region obtained by the union of a sequence of geographic regions.
+*
+* If the data object represents a data frame, all elements within the data frame
+* should be described using @param or @field. One @param or @field per attribute:
+*
+* @field rmoRegionIdentifier: uniquely identifies a RmoRegion, including uniqueness over time.
+*
+* @field sequenceOfGeographicRegion: a geographic region obtained by the union of the geographic regions contained in this sequence.
+*
+*/
+RmoRegion ::= SEQUENCE { 
+    rmoRegionIdentifier             RmoRegionIdentifier,
+    sequenceOfGeographicRegion      SequenceOfGeographicRegion,
+    ...
+  }
+
+SequenceOfGeographicRegion ::=  SEQUENCE OF GeographicRegion
+
+GeographicRegion ::= CHOICE {
+    circularRegion      CircularRegion,
+    polygonalRegion     PolygonalRegion,
+    ellipticalRegion    EllipticalRegion,
+    ...
+  }
+
+/**
+* This DF defines a Circular region.
+*
+* If the data object represents a data frame, all elements within the data frame
+* should be described using @param or @field. One @param or @field per attribute:
+*
+* @field center: defines the position of the center of the circular region.
+*
+* @field radius: defines the radius of the circular region.
+*
+*/  
+CircularRegion ::= SEQUENCE {
+    center  GeoPositionWoAltitude,
+    radius  StandardLength2B
+  }
+
+PolygonalRegion ::= SEQUENCE SIZE (3..MAX) OF GeoPositionWoAltitude
+
+--! IMPORTED EllipticalShape with constraints.
+SimpleEllipticalShape ::= EllipticalShape
+        (WITH COMPONENTS {..., shapeReferencePoint ABSENT,
+                               orientation  PRESENT, height ABSENT})
+
+/**
+* This DF defines an Elliptical region.
+*
+* If the data object represents a data frame, all elements within the data frame
+* should be described using @param or @field. One @param or @field per attribute:
+*
+* @field center: defines the position of the center of the elliptical region.
+*
+* @field ellipticalShape: defines the shape of the elliptical region. Imported from ts102894_2.
+*
+*/  
+EllipticalRegion ::= SEQUENCE{
+    center  GeoPositionWoAltitude,
+    ellipticalShape SimpleEllipticalShape
+}
+
+--! @brief ItsStationType refers to a type of ITS station. It may be e.g. vehicular, pedestrian, or various type of ITS stations access layer technologies. 
+ItsStationType ::= ENUMERATED { 
+    --! any(0) represents any type of ITS station.
+	  any(0),
+	  obu(1),			 
+	  rsu(2),				 
+    ...
+  }
+
+END

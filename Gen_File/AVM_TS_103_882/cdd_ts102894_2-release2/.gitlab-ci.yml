@@ -1,0 +1,20 @@
+include:
+  - project: 'forge-tools/asn2md'
+    file: '/gitlab-ci/base.yml'
+
+variables:
+  ASN1_SRC: '*.asn'
+  ASN2MD_OPTIONS: '--no-auto-values --no-auto-fields'
+  
+validate:
+  extends: .validate
+  only:
+    changes:
+      - '*.asn'
+
+
+documentation:
+  extends: .documentation
+  only:
+    changes:
+      - '*.asn'

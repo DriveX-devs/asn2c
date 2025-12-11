@@ -1,0 +1,221 @@
+EtsiTs103759AsrCam {itu-t(0) identified-organization(4) etsi(0)
+  itsDomain(5) wg5(5) ts(103759) aid-specific(2) cam(36) 
+  major-version-1(1) minor-version-1(1)}
+
+DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+EXPORTS ALL;
+
+IMPORTS
+  C-ASR-EV,
+  C-ASR-OBS-BY-TGT,
+  C-ASR-SINGLE-OBS,
+  MbSingleObservation,
+  TemplateAsr
+FROM EtsiTs103759BaseTypes {itu-t(0) identified-organization(4) etsi(0) 
+  itsDomain(5) wg5(5) ts(103759) general(1) base-types(3) major-version-1(1) 
+  minor-version-1 (1)}
+WITH SUCCESSORS
+
+  obs-Beacon-IntervalTooSmall,
+  obs-Static-Change,
+  obs-Security-MessageIdIncWithHeaderInfo,
+  obs-Security-HeaderIncWithSecurityProfile,
+  obs-Security-HeaderPsidIncWithCertificate,
+  obs-Security-MessageIncWithSsp,
+  obs-Security-HeaderTimeOutsideCertificateValidity,
+  obs-Security-MessageLocationOutsideCertificateValidity,
+  obs-Security-HeaderLocationOutsideCertificateValidity, 
+  obs-Position-ChangeTooLarge,
+  obs-Speed-ValueTooLarge-VehicleType,
+  obs-Speed-ValueTooLarge-DriveDirectionReverse,
+  obs-Speed-ChangeTooLarge,
+  obs-LongAcc-ValueTooLarge
+FROM EtsiTs103759CommonObservations {itu-t(0) identified-organization(4) 
+  etsi(0) itsDomain(5) wg5(5) ts(103759) general(1) common-observations(2)
+  major-version-1(1) minor-version-1(1)}
+WITH SUCCESSORS
+
+  Uint8
+FROM Ieee1609Dot2BaseTypes {iso(1) identified-organization(3) ieee(111) 
+  standards-association-numbered-series-standards(2) wave-stds(1609) dot2(2)
+  base(1) base-types(2) major-version-2(2) minor-version-4(4)}
+WITH SUCCESSORS
+;
+
+/**
+ * This data type is for reporting CAM issues.
+ */
+AsrCam ::= TemplateAsr {{SetMbObsTgtsCam}, {SetMbEvCam}}
+
+
+/* Identify target classes for CAM */
+IdCamTgt ::= Uint8
+
+c-CamTgt-BeaconCommon    IdCamTgt ::= 0
+c-CamTgt-StaticCommon    IdCamTgt ::= 1
+c-CamTgt-SecurityCommon  IdCamTgt ::= 2
+c-CamTgt-PositionCommon  IdCamTgt ::= 3
+c-CamTgt-SpeedCommon     IdCamTgt ::= 4
+c-CamTgt-LongAccCommon   IdCamTgt ::= 5
+
+SetMbObsCamBeacon C-ASR-SINGLE-OBS ::= {
+  obs-Beacon-IntervalTooSmall,
+  ...
+}
+
+SetMbObsCamStatic C-ASR-SINGLE-OBS ::= {
+  obs-Static-Change,
+  ...
+}
+
+SetMbObsCamSecurity C-ASR-SINGLE-OBS ::= {
+  obs-Security-MessageIdIncWithHeaderInfo |
+  obs-Security-HeaderIncWithSecurityProfile |
+  obs-Security-HeaderPsidIncWithCertificate |
+  obs-Security-MessageIncWithSsp |
+  obs-Security-HeaderTimeOutsideCertificateValidity |
+  obs-Security-MessageLocationOutsideCertificateValidity |
+  obs-Security-HeaderLocationOutsideCertificateValidity, 
+  ...
+}
+
+SetMbObsCamPosition C-ASR-SINGLE-OBS ::= {
+  obs-Position-ChangeTooLarge,
+  ...
+}
+
+SetMbObsCamSpeed C-ASR-SINGLE-OBS ::= {
+  obs-Speed-ValueTooLarge-VehicleType |
+  obs-Speed-ValueTooLarge-DriveDirectionReverse |
+  obs-Speed-ChangeTooLarge,
+  ...
+}
+
+SetMbObsCamLongAcc C-ASR-SINGLE-OBS ::= {
+  obs-LongAcc-ValueTooLarge,
+  ...
+}
+
+
+
+/**
+ * This is a complete set of observations for CAM. Application-specific
+ * trigger conditions and other relevant information are specified below.
+ *
+ * - _SetMbObsCamBeacon_:
+ *   - `Beacon-IntervalTooSmall`: The difference between the generation 
+ * time of two consecutive CAMs is less than 80% of the value specified in TS
+ * 103 900 v2.0.0 section 6.1.3. The difference is calculated as the difference 
+ * between the two values of generationDeltaTime. The two CAMs presented 
+ * shall have the difference in the generationTime from the security 
+ * headerInfo be less than 65,535 milliseconds, and the generationTime in the 
+ * second CAM greater than the generationTime in the first. If the 
+ * generationDeltaTime value in the second CAM is less than the 
+ * generationDeltaTime in the first, 65,536 milliseconds shall be added to 
+ * the value in the second for purposes of determining the difference between 
+ * the two generationDeltaTime values.  
+ *
+ * - _SetMbObsCamStatic_:
+ *   - `Static-Change`: Any change in the values of one or more of the 
+ * following fields: performanceClass, specialTransportType, stationType, 
+ * vehicleLength, vehicleRole, vehicleWidth.
+ *     - `Semantics of the BIT STRING`: performanceClass(0), 
+ * specialTransportType(1), stationType(2), vehicleLength(3), vehicleRole(4), 
+ * vehicleWidth(5).
+ * 
+ *
+ * - _SetMbObsCamSecurity_:
+ *   - `Security-MessageIdIncWithHeaderInfo`: The messageID is inconsistent
+ * with the security headerInfo, e.g., messageId = cam(2) but psid in the 
+ * security headerInfo is not equal to 36, the PSID value of CAM.
+ *
+ *   - `Security-HeaderIncWithSecurityProfile`: The security headerInfo is 
+ * inconsistent with the security profile specified in ETSI TS 103 097 V2.1.1
+ * (2021-10), e.g., generationTime is absent in the security headerInfo but 
+ * is required to be present in the security profile.
+ *
+ *   - `Security-HeaderPsidIncWithCertificate`: The psid in the security 
+ * headerInfo is not contained in the appPermissions of the certificate, e.g., 
+ * psid in the security headerInfo is equal to 36, but the appPermissions in the
+ * certificate does not include the value 36.
+ *
+ *   - `Security-MessageIncWithSsp`: The message payload is inconsistent 
+ * with the SSP in the certificate, as specified in TS 103 900 v2.0.0,e.g., 
+ * publicTransportContainer is present in the specialVehicleContainer but the
+ * relevant SSP in the certificate does not permit publicTransportContainer.
+ *
+ *   - `Security-HeaderTimeOutsideCertificateValidity`: The generationTime
+ * in the security headerInfo is outside the validityPeriod in the certificate.
+ *
+ *   - `Security-MessageLocationOutsideCertificateValidity`: The 
+ * referencePosition in the message is outside the region in the certificate. 
+ *
+ *   - `Security-HeaderLocationOutsideCertificateValidity`: The 
+ * generationLocation in the security headerInfo is outside the region in the 
+ * certificate.
+ *
+ * - _SetMbObsEtsiOnlyPosition_:
+ *   - `Position-ChangeTooLarge`: The speed calculated from the change in 
+ * referencePosition of two consecutive CAMs meets the trigger conditions of 
+ * Speed-ValueTooLarge-VehicleType.
+ *
+ * - _SetMbObsEtsiOnlySpeed_:
+ *   - `Speed-ValueTooLarge-VehicleType`: The trigger conditions depend on
+ * the stationType as follows:
+ *
+ *     - `passengerCar(5)`: The speedValue is greater than 14,000. (Currently, the
+ * fastest car in the world has a top speed that is less than 500 km/h, i.e., 
+ * 13,889 cm/s.) 
+ *
+ *     - `motorcycle(4), bus(6), lightTruck(7), heavyTruck(8), trailer(9)`: The 
+ * speedValue is greater than 8,500. (Currently, the top speed on most popular
+ * cars is less than 300 km/h, i.e., 8,333 cm/s.)
+ *
+ *     - `unknown(0), pedestrian(1), cyclist(2), moped(3), specialVehicles(10), 
+ * tram(11)` : The speedValue is greater than 3,000. (Currently, non-highway 
+ * speed limits are usually well below 100 km/h, i.e., 2,778 cm/s.)
+ *
+ *     - `roadSideUnit(15)`: The speedValue is greater than 0. (Road side units 
+ * shouldn't be transmitting while being transported.)
+ *
+ *   - `Speed-ValueTooLarge-DriveDirectionReverse`: The driveDirection is 
+ * backward (1) and the speedValue is greater than 3,000. (Usually, backward 
+ * drives are far less than 50m long, and with maximum possible acceleration of 
+ * 9 m/s^2 (see trigger conditions for LongAcc-ValueTooLarge), max attainable 
+ * speed is $`\sqrt{2*9*50}`$ m/s, i.e., 3,000 cm/s.)
+ *
+ *   - `Speed-ChangeTooLarge`: The acceleration calculated from the change 
+ * in speedValue of two consecutive CAMs meets the trigger conditions of 
+ * LongAcc-ValueTooLarge.
+ *
+ * - _SetMbObsEtsiOnlyLongAcc_:
+ *   - `LongAcc-ValueTooLarge`: The longitudinalAcceleration is greater 
+ * than 90 dm/s^2. (Typical $`\mu`$ (coefficient of friction between asphalt and 
+ * rubber) is 0.9, so maximum possible acceleration is 0.9*9.8 m/s^2, i.e., 
+ * 88.2 dm/s^2.)
+ */
+SetMbObsTgtsCam C-ASR-OBS-BY-TGT ::= {
+  {MbSingleObservation{{SetMbObsCamBeacon}}   BY 
+    c-CamTgt-BeaconCommon} |
+  {MbSingleObservation{{SetMbObsCamStatic}}   BY 
+    c-CamTgt-StaticCommon} |
+  {MbSingleObservation{{SetMbObsCamSecurity}} BY 
+    c-CamTgt-SecurityCommon} |
+  {MbSingleObservation{{SetMbObsCamPosition}} BY 
+    c-CamTgt-PositionCommon} |
+  {MbSingleObservation{{SetMbObsCamSpeed}}    BY 
+    c-CamTgt-SpeedCommon} |
+  {MbSingleObservation{{SetMbObsCamLongAcc}}  BY 
+    c-CamTgt-LongAccCommon},
+  ... 
+}
+
+/**
+ * This data type defines the IOS for CAM Evidence.
+ */
+SetMbEvCam C-ASR-EV ::= {
+  ...
+}
+
+END

@@ -1,0 +1,42 @@
+PIM-SA-Application-Data-Descriptions  {itu-t (0) identified-organization (4) etsi (0) itsDomain (5) wg1 (1) pimPduRelease2 (104072) saApplicationData (2) major-version-2 (2) minor-version-1 (1)}
+
+DEFINITIONS AUTOMATIC TAGS ::=
+
+BEGIN
+
+IMPORTS
+
+TrafficParticipantType
+
+FROM ETSI-ITS-CDD {
+    itu-t (0) identified-organization (4) etsi (0) itsDomain (5) wg1 (1) 102894 cdd (2) major-version-4 (4) minor-version-2 (2)
+}
+;
+
+/**
+ * This DF indicates data to be put in the advertisement service's application-specific data field.
+ *
+ * @field request: If present, then the sender C-ITS station indicates a request for PIMs from remote ITS stations.
+ *
+ * @category:
+ * @revision: Created in V2.1.1
+*/
+PimAdvertiseApplicationData ::= SEQUENCE {
+	request             PimRequest OPTIONAL,
+    ...
+}
+
+/**
+ * This DF contains data fields elaborating the parking space request.
+ *
+ * @field vehicleType: This field represents the type of the sender vehicle.
+ *
+ * @category:
+ * @revision: Created in V2.1.1
+*/
+PimRequest ::= SEQUENCE {
+    vehicleType         TrafficParticipantType,
+    ...
+}
+
+END

@@ -1,0 +1,159 @@
+EtsiTs103759Core {itu-t(0) identified-organization(4) etsi(0) 
+  itsDomain(5) wg5(5) ts(103759) general(1) core(1) major-version-1(1) 
+  minor-version-1(1)}
+
+DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+EXPORTS ALL;
+
+IMPORTS
+  EtsiTs103097Data-SignedAndEncrypted-Unicast
+FROM EtsiTs103097Module {itu-t(0) identified-organization(4) etsi(0) 
+  itsDomain(5) wg5(5) secHeaders(103097) core(1) major-version-3(3) 
+  minor-version-1(1)} 
+WITH SUCCESSORS
+
+  Psid,
+  ThreeDLocation,
+  Time64,
+  Uint8
+FROM Ieee1609Dot2BaseTypes {iso(1) identified-organization(3) ieee(111)
+  standards-association-numbered-series-standards(2) wave-stds(1609) dot2(2)
+  base(1) base-types(2) major-version-2(2) minor-version-4(4)}
+WITH SUCCESSORS
+
+  AsrAppAgnostic
+FROM EtsiTs103759AsrAppAgnostic {itu-t(0) identified-organization(4) etsi(0)
+  itsDomain(5) wg5(5) ts(103759) aid-specific(2) appAgnostic(270549119) 
+  major-version-1(1) minor-version-0(0)}
+WITH SUCCESSORS
+
+  AsrCam 
+FROM EtsiTs103759AsrCam {itu-t(0) identified-organization(4) etsi(0)
+  itsDomain(5) wg5(5) ts(103759) aid-specific(2) cam(36) 
+  major-version-1(1) minor-version-0(0)}
+WITH SUCCESSORS
+
+  AsrDenm 
+FROM EtsiTs103759AsrDenm {itu-t(0) identified-organization(4) etsi(0) 
+  itsDomain(5) wg5(5) ts(103759) aid-specific(2) denm(37) 
+  major-version-1(1) minor-version-0(0)}
+WITH SUCCESSORS
+
+  AsrBsm 
+FROM SaeJ3287AsrBsm {joint-iso-itu-t(2) country(16) us(840) organization(1)
+  sae(114566) v2x-communications(1) technical-committees(1) v2x-security(4)
+  technical-reports(1) misbehavior-reporting(1) asn1-module(1) 
+  aid-specific(2) bsm(32) major-version-1(1) minor-version-0(0)}
+WITH SUCCESSORS
+;
+
+/**
+ * This data type is the general PDU for a misbehaviour report from an 
+ * ITS-S to the MA responsible for reports of that type.
+ *
+ * AID-specific modules (EtsiTs103759AsrAppAgnostic, EtsiTs103759AsrCam, 
+ * EtsiTs103759AsrDenm, SaeJ3287AsrBsm) have been imported using `WITH SUCCESSORS`
+ * to enable importing one or more of those modules with minor-version greater 
+ * than `0` without requiring any change in the import statements. At least one of
+ * these AID-specific modules shall have minor-version greater than `0`.
+ *
+ * @param version: contains the version number of this PDU definition. For this
+ * version of this data type it shall be equal to `2`.
+ *
+ * @param generationTime: contains information on when this PDU was generated.
+ *
+ * @param observationLocation: is the location at which the last observation of
+ * a V2X PDU was made before the decision was taken to generate a report.
+ *
+ * @param report: contains the AID-specific misbehaviour report.
+ */
+EtsiTs103759Data ::= SEQUENCE {
+  version              Uint8,
+  generationTime       Time64, 
+  observationLocation  ThreeDLocation, 
+  report               AidSpecificReport 
+}
+
+/**
+ * This structure is the SPDU used to send a signed and encrypted 
+ * @ref EtsiTs103759Data to the MA.
+ *
+ * For the signature to be valid the signing certificate shall conform to the
+ * authorization ticket profile given in clause 7.2.1 of ETSI TS 103 097 v2.1.1,
+ * where the appPermissions field in the authorization ticket allows signing of 
+ * misbehaviour reports. The signed @ref EtsiTs103759Data shall be encrypted 
+ * to the MA using the encryption key in the MA's certificate.
+ */
+EtsiTs103759Data-SignedAndEncrypted-Unicast ::= 
+  EtsiTs103097Data-SignedAndEncrypted-Unicast {
+  EtsiTs103759Data
+}
+
+/**
+ * This data type is the whole report on issues detected for a specific ITS-AID.
+ * This ITS-AID may identify an individual application, or may identify
+ * cross-application or non-application-specific misbehaviour cases.
+ *
+ * @param aid: contains the respective ITS-AID.
+ *
+ * @param content: contains the report contents, e.g., @ref AsrCam. This will be a 
+ * @ref TemplateAsr instantiated with AID-specific Information Object Sets.
+ */
+AidSpecificReport ::= SEQUENCE {
+  aid      C-ASR.&aid ({SetAsr}),
+  content  C-ASR.&Content ({SetAsr}{@.aid})
+}
+
+/**
+ * This data type defines the IOC for @ref AidSpecificReport. 
+ *
+ * @param aid: contains the globally unique reference identifier of an 
+ * AID-specific misbehaviour report.
+ *
+ * @param Content: contains the open type of the PDU identified by aid. This 
+ * will be a @ref TemplateAsr instantiated with AID-specific Information Object
+ * Sets. 
+ */
+C-ASR ::= CLASS {
+  &aid      Psid UNIQUE, 
+  &Content   
+} WITH SYNTAX {&Content IDENTIFIED BY &aid}
+
+/**
+ * This data type defines the IOS for AidSpecificReport.
+ *
+ * See the ASN.1 modules where each set is defined for a description of that set.
+ */
+SetAsr C-ASR ::= {
+  {AsrAppAgnostic IDENTIFIED BY c-AsrAppAgnostic} |
+  {AsrCam         IDENTIFIED BY c-AsrCam} |
+  {AsrDenm        IDENTIFIED BY c-AsrDenm}, 
+  ...,
+  {AsrBsm         IDENTIFIED BY c-AsrBsm}
+}
+
+/**
+ * This data type contains the ITS-AID of the unknown service. 
+ * 
+ * @note This value is used for suspicious observations that are not
+ * or cannot be linked to a specific application.
+ */
+c-AsrAppAgnostic Psid ::= 270549119
+
+/**
+ * This data type contains the ITS-AID of the CA service. 
+ */
+c-AsrCam Psid ::= 36 
+
+/**
+ * This data type contains the ITS-AID of the DEN service. 
+ */
+c-AsrDenm Psid ::= 37
+
+/**
+ * This data type contains the ITS-AID of the BSM. 
+ */
+c-AsrBsm Psid ::= 32
+
+END

@@ -1,0 +1,202 @@
+EtsiTs103759BaseTypes {itu-t(0) identified-organization(4) etsi(0) 
+  itsDomain(5) wg5(5) ts(103759) general(1) base-types(3) major-version-1(1) 
+  minor-version-1 (1)}
+
+DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+EXPORTS ALL;
+
+IMPORTS
+  Opaque,
+  Uint8
+FROM Ieee1609Dot2BaseTypes {iso(1) identified-organization(3) ieee(111)
+  standards-association-numbered-series-standards(2) wave-stds(1609) dot2(2)
+  base(1) base-types(2) major-version-2(2) minor-version-4(4)}
+WITH SUCCESSORS
+
+  Ieee1609Dot2Data, 
+  Certificate
+FROM Ieee1609Dot2 {iso(1) identified-organization(3) ieee(111)
+  standards-association-numbered-series-standards(2) wave-stds(1609) dot2(2)
+  base(1) schema(1) major-version-2(2) minor-version-6(6)}
+WITH SUCCESSORS
+;
+
+/**
+ * This data type contains the template for a report on any ITS PDU. 
+ *
+ * @param observations: identifies which detectors were triggered and why. It 
+ * can include cross-references to the PDUs and evidence fields. The 
+ * observations are drawn from a supplied application-specific observation 
+ * Information Object Set.
+ *
+ * @param v2xPduEvidence: contains PDUs that triggered the detectors reported in
+ * the observations field, plus other PDUs sent for the same application (AID) 
+ * by the same sender).
+ *
+ * @param nonV2xPduEvidence: is any information that was used by the 
+ * detectors other than the V2X PDUs. If the report does not contain any
+ * observations that use other evidence (for example, if the report is simply 
+ * that a speed value is implausibly high for any land vehicle, or that two 
+ * V2X PDUs appear to show two different senders in the same physical 
+ * space) then this field can be length `0`. The evidence is drawn from a 
+ * supplied application-specific evidence Information Object Set.
+ */
+TemplateAsr {
+  C-ASR-OBS-BY-TGT: ObservationSet, C-ASR-EV: NonV2xPduEvidenceSet
+} ::= SEQUENCE {
+  observations       ObservationsByTargetSequence {{ObservationSet}}, 
+  v2xPduEvidence     SEQUENCE (SIZE(1..MAX)) OF V2xPduStream,
+  nonV2xPduEvidence  NonV2xPduEvidenceItemSequence {{NonV2xPduEvidenceSet}}
+}
+
+/**
+ * This data type contains all of the observations related to a 
+ * particular "target" property, e.g., speed or security.
+ *
+ * @param tgtId: identifies the "target" of the observation, e.g., speed. This 
+ * identifier is drawn from an application-specific Information Object Set of
+ * observations by target.
+ *
+ * @param observations: contains all the observations related to that target. 
+ * The observations are drawn from the provided Information Object Set.
+ */
+ObservationsByTarget {C-ASR-OBS-BY-TGT: SetAsrObsByTgt} ::= SEQUENCE {
+  tgtId         C-ASR-OBS-BY-TGT.&id ({SetAsrObsByTgt}),
+  observations  SEQUENCE OF C-ASR-OBS-BY-TGT.&Val  ({SetAsrObsByTgt}{@.tgtId})
+}
+
+ObservationsByTargetSequence { C-ASR-OBS-BY-TGT: SetAsrObsByTgt } ::= 
+  SEQUENCE (SIZE(1..MAX)) OF ObservationsByTarget {{ SetAsrObsByTgt }}
+
+/**
+ * This is the Information Object Class used to define observations-by-target.
+ */
+C-ASR-OBS-BY-TGT ::= C-2ENT
+
+/**
+ * This data type contains a single misbehaviour observation.
+ *
+ * @param obsId: identifies the observation within the set of observations
+ * for that target, e.g., target = speed, observation = "speed higher than 
+ * plausible given the physical map". This identifier is drawn from an 
+ * application-and-target-specific Information Object Set of single 
+ * observations.
+ *
+ * @param obs: contains any parameters relevant to the observation. The 
+ * observations are drawn from the provided Information Object Set.
+ */
+MbSingleObservation {C-ASR-SINGLE-OBS: SetMbSingleObs} ::= SEQUENCE {
+  obsId  C-ASR-SINGLE-OBS.&id ({SetMbSingleObs}),
+  obs    C-ASR-SINGLE-OBS.&Val ({SetMbSingleObs}{@.obsId})
+}
+
+/**
+ * This is the Information Object Class used to define single observations.
+ */
+C-ASR-SINGLE-OBS ::= C-2ENT 
+
+/**
+ * This data type contains PDU stream from a single sender.
+ *
+ * @param id: identifies the type of the PDU, meaning in this case 
+ * what protocol headers are included from the stack.
+ *
+ * @param v2xPdus: is the PDU stream, i.e., a series of PDUs for the same AID
+ * sent by the same sender (where "sent by the same sender" means "signed by
+ * the same certificate"). The PDUs are ordered in chronological order of 
+ * reception by the reporter. All PDUs in this field are of the same type, 
+ * i.e., correspond to the same IdObsPdu. This field will always contain a 
+ * "subject PDU", i.e., a PDU that is the subject of the observations. 
+ * Additional PDUs may be included depending on which observations appear in 
+ * the observations field. A specification of an observation is expected to 
+ * include a specification of which PDUs are to be included in this field.
+ *
+ * @param certificate: contains the certificate that signed the PDUs if it is 
+ * not explicitly included in one of the PDUs. For ETSI PDUs (i.e., PDUs with
+ * the psid field in the security headerInfo equal to an ITS-AID assigned to
+ * ETSI as per ETSI TS 102 965) the certificate shall be of type 
+ * `EtsiTs103097Certificate` as specified in ETSI TS 103 097. (There is no need
+ * to include the entire certificate chain from the ITS station up to the Root
+ * CA, just the ITS station certificate is enough, as the MA is expected to
+ * have the rest of the certificates in the chain.) Note that if the sender
+ * certificate changes, PDUs signed by the new certificate and included in
+ * this report will be in a separate V2xPduStream instance within the
+ * `v2xPduEvidence` field of the @ref TemplateAsr.
+ *
+ * @param subjectPduIndex: identifies which PDU within the `v2xPdus` sequence 
+ * is the "subject PDU", i.e., the PDU associated with the observations.
+ */
+V2xPduStream ::= SEQUENCE {
+  type             C-OBS-PDU.&id ({SetObsPdu}),
+  v2xPdus	         SEQUENCE (SIZE(1..255)) OF C-OBS-PDU.&Val ({SetObsPdu}{@.type}),
+  certificate      Certificate OPTIONAL,
+  subjectPduIndex  Uint8,
+  ...
+}
+
+/**
+ * This is the Information Object Class used to define different types of observed PDUs.
+ */
+C-OBS-PDU ::= C-2ENT
+
+/**
+ * This data type contains the IOS for the observed PDU. 
+ */
+SetObsPdu C-OBS-PDU ::= {
+  {ObsPduEtsiGn     BY c-ObsPdu-etsiGn} |
+  {Ieee1609Dot2Data BY c-ObsPdu-ieee1609Dot2Data},
+  ...
+}
+
+/**
+ * This data type contains the identifier of the type of observed PDU. 
+ *
+ * @param c-ObsPdu-etsiGn: is the identifier for ETSI GeoNetworking.
+ *
+ * @param c-ObsPdu-ieee1609Dot2Data: is the identifier for IEEE 1609.2.
+ */
+IdObsPdu ::= Uint8
+c-ObsPdu-etsiGn            IdObsPdu ::= 1
+c-ObsPdu-ieee1609Dot2Data  IdObsPdu ::= 2
+
+/**
+ * ObsPduEtsiGn shall contain an encoded ETSI geonetworking PDU 
+ * according to ETSI TS 103 836-4-1, at GeoNetworking level, i.e. without 
+ * Access Layer header.
+ */
+ObsPduEtsiGn ::= Opaque
+
+/**
+ * This data type contains evidence, which may be referenced by one or more observations.
+ *
+ * @param id: identifies the evidence type.
+ *
+ * @param evidence: contains the evidence.
+ */
+NonV2xPduEvidenceItem {C-ASR-EV: SetMbEv} ::= SEQUENCE {
+  id        C-ASR-EV.&id ({SetMbEv}),
+  evidence  C-ASR-EV.&Val ({SetMbEv}{@.id})
+}
+
+NonV2xPduEvidenceItemSequence {C-ASR-EV: NonV2xPduEvidenceSet} ::=  
+  SEQUENCE (SIZE(0..MAX)) OF NonV2xPduEvidenceItem {{ NonV2xPduEvidenceSet }}
+
+/**
+ * This is the Information Object Class used to define evidence.
+ *
+ * @note No instances of this class are defined in this version of this document.
+ */
+C-ASR-EV ::= C-2ENT 
+
+/**
+ * This structures uses single-byte IDs. If we run out of ID space 
+ * in future, the Val type associated with ID 255 can also be structured 
+ * hierarchically to extend the space.
+ */
+C-2ENT ::= CLASS {
+  &id   Uint8,
+  &Val
+} WITH SYNTAX {&Val BY &id}
+
+END

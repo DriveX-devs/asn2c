@@ -1,0 +1,304 @@
+--<OSS.PDU>--
+ 
+-- First edition 2016
+
+ITSlm { iso (1) standard (0) localized (16460) lm(1) version0 (0)}  
+
+DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+IMPORTS
+
+RXcip, TXcip FROM CALMfntp { iso (1) standard (0) calm-nonip(29281) fntp(1) asnm-1 (1) version1 (1)} 
+
+FNTPlpp FROM CALMlegacySupport { iso (1) standard (0) calm-nonip(29281) legacy (2) asnm-1 (1) version1 (1)} 
+
+Link-ID FROM CALMllsap {iso(1) standard(0) calm-ll-sap(21218) asnm-1 (1) version1 (1)} 
+
+ITS-scuId FROM CALMmanagement { iso (1) standard (0) calm-management (24102) local (1) asnm-1 (1) version1 (1)} 
+
+VarLengthNumber, VarLengthNumber2 FROM CITSapplMgmtIDs {iso(1) standard(0) cits-applMgmt (17419) ids (1) version1 (1)} 
+
+EXT-TYPE, Extension, RefExt, c-TxPowerUsed80211,c-ChannelNumber80211, c-DataRate80211, c-Reserved, TXpower80211, ChannelNumber80211, DataRate80211, c-LMchannelBusyRatio, c-LMrxCip, c-LMtxCip, c-LMpacketID, c-LMchannelBusyRatio, LMchannelBusyRatio  FROM ITSee { iso (1) standard (0) localized (16460) ee(4) version0 (0)} 
+
+;
+-- End of IMPORTS
+
+-- Localized Message
+LMnpdu::=SEQUENCE{ 
+	subtype	ShortMsgSubtype,
+	transport	ShortMsgTpdus,
+	body	ShortMsgData 
+	} -- from IEEE 1609.3™-2016
+
+-- The below is an extension of ShortMsgSubtype specified in IEEE 1609.3™-2016
+ShortMsgSubtype::=CHOICE{
+	nullNetworking	[0] NullNetworking, -- from IEEE 1609.3™-2016
+	itssInternalForwarding	[1] LMinternalForwardingHeader,
+	nHopForwarding	[2] LMmultiHopInfo,
+	subTypeReserved3	[3] NoSubtypeProcessing,
+	subTypeReserved4	[4] NoSubtypeProcessing,
+	subTypeReserved5	[5] NoSubtypeProcessing,
+	subTypeReserved6	[6] NoSubtypeProcessing,
+	subTypeReserved7	[7] NoSubtypeProcessing,
+	subTypeReserved8	[8] NoSubtypeProcessing,
+	subTypeReserved9	[9] NoSubtypeProcessing,
+	subTypeReserved19	[10] NoSubtypeProcessing,
+	subTypeReserved11	[11] NoSubtypeProcessing,
+	subTypeReserved12	[12] NoSubtypeProcessing,
+	subTypeReserved13	[13] NoSubtypeProcessing,
+	subTypeReserved14	[14] NoSubtypeProcessing,
+	subTypeReserved15	[15] NoSubtypeProcessing
+	}
+
+NoSubtypeProcessing ::= SEQUENCE{
+	optBit	BIT STRING (SIZE(1)),  -- always set to '0'b
+	version	ShortMsgVersion -- set to c-shortMsgVersion2016
+	}
+
+ShortMsgVersion ::= INTEGER{
+	c-shortMsgVersion2016	(3)
+	}(0..7)
+
+NullNetworking::= SEQUENCE{
+	version	ShortMsgVersion,
+	nExtensions	ShortMsgNextensions OPTIONAL
+	} 
+
+LMinternalForwardingHeader::=SEQUENCE{
+	version	ShortMsgVersion,
+	direction	LMforwardDirection,
+	hostITS-scuId	ITS-scuId,
+	link	Link-ID,
+	counter	LMpacketCounter,
+	nExtensions	ShortMsgNextensions OPTIONAL,
+	origHeader	ShortMsgSubtype -- Subtype 1 is invalid
+	}
+
+LMforwardDirection ::= INTEGER{
+	hostToRouter	(0),
+	routerToHost (255)
+	} (0..255)
+
+LMmultiHopInfo::=SEQUENCE{
+	version	ShortMsgVersion,
+	messageID	LMmessageID,
+	hopCount	LMhopCount,
+	nExtensions	ShortMsgNextensions OPTIONAL
+	}
+
+LMmessageID::=INTEGER(0..4194303)
+
+LMhopCount::=INTEGER(0..3)
+
+-- N-Extensions
+-- Sequence of 0 to n extension elements
+-- The value of n may be limited
+ShortMsgNextensions::=SEQUENCE OF ShortMsgNextension
+
+-- A single N-Extension element
+ShortMsgNextension::= Extension{{ShortMsgNextTypes}}
+
+
+-- all available N-Extensions
+-- the below is an extension of ShortMsgNextTypes specified in IEEE 1609.3™-2016
+ShortMsgNextTypes EXT-TYPE::={
+	{ TXpower80211	IDENTIFIED BY c-TxPowerUsed80211 } |
+	{ ChannelNumber80211	IDENTIFIED BY c-ChannelNumber80211 } |
+	{ DataRate80211	IDENTIFIED BY c-DataRate80211 } |
+	{ LMchannelBusyRatio	IDENTIFIED BY c-LMchannelBusyRatio } |
+	{ RXcip	IDENTIFIED BY c-LMrxCip } |
+	{ TXcip	IDENTIFIED BY c-LMtxCip },
+	...
+	}
+
+-- end of N-xtensions
+
+
+-- CHOICE tag value equals TPID Feature selector value
+-- The following type is an extension of ShortMsgTpdus 
+-- specified in IEEE 1609.3™-2016
+ShortMsgTpdus::=CHOICE{
+ 	bcMode	[0] LMbcPDU, -- from IEEE 1609.3™-2016
+	ucMode	[1] LMgeneralPDU,
+	lpp	[2] LMlppPDU,
+	tpidReserved3	[3] NoTpidProcessing, 
+	tpidReserved4	[4] NoTpidProcessing, 
+	tpidReserved5	[5] NoTpidProcessing, 
+	tpidReserved6	[6] NoTpidProcessing, 
+	tpidReserved7	[7] NoTpidProcessing, 
+	tpidReserved8	[8] NoTpidProcessing, 
+	tpidReserved9	[9] NoTpidProcessing, 
+	tpidReserved10	[10] NoTpidProcessing, 
+	tpidReserved11	[11] NoTpidProcessing,
+	tpidReserved12	[12] NoTpidProcessing,
+	tpidReserved13	[13] NoTpidProcessing,
+	tpidReserved14	[14] NoTpidProcessing,
+	tpidReserved15	[15] NoTpidProcessing,
+	tpidReserved16	[16] NoTpidProcessing,
+	tpidReserved17	[17] NoTpidProcessing,
+	tpidReserved18	[18] NoTpidProcessing,
+	tpidReserved19	[19] NoTpidProcessing,
+	tpidReserved20	[20] NoTpidProcessing,
+	tpidReserved21	[21] NoTpidProcessing,
+	tpidReserved22	[22] NoTpidProcessing,
+	tpidReserved23	[23] NoTpidProcessing,
+	tpidReserved24	[24] NoTpidProcessing,
+	tpidReserved25	[25] NoTpidProcessing,
+	tpidReserved26	[26] NoTpidProcessing,
+	tpidReserved27	[27] NoTpidProcessing,
+	tpidReserved28	[28] NoTpidProcessing,
+	tpidReserved29	[29] NoTpidProcessing,
+	tpidReserved30	[30] NoTpidProcessing,
+	tpidReserved31	[31] NoTpidProcessing,
+	tpidReserved32	[32] NoTpidProcessing,
+	tpidReserved33	[33] NoTpidProcessing,
+	tpidReserved34	[34] NoTpidProcessing,
+	tpidReserved35	[35] NoTpidProcessing,
+	tpidReserved36	[36] NoTpidProcessing,
+	tpidReserved37	[37] NoTpidProcessing,
+	tpidReserved38	[38] NoTpidProcessing,
+	tpidReserved39	[39] NoTpidProcessing,
+	tpidReserved40	[40] NoTpidProcessing,
+	tpidReserved41	[41] NoTpidProcessing,
+	tpidReserved42	[42] NoTpidProcessing,
+	tpidReserved43	[43] NoTpidProcessing,
+	tpidReserved44	[44] NoTpidProcessing,
+	tpidReserved45	[45] NoTpidProcessing,
+	tpidReserved46	[46] NoTpidProcessing,
+	tpidReserved47	[47] NoTpidProcessing,
+	tpidReserved48	[48] NoTpidProcessing,
+	tpidReserved49	[49] NoTpidProcessing,
+	tpidReserved50	[50] NoTpidProcessing,
+	tpidReserved51	[51] NoTpidProcessing,
+	tpidReserved52	[52] NoTpidProcessing,
+	tpidReserved53	[53] NoTpidProcessing,
+	tpidReserved54	[54] NoTpidProcessing,
+	tpidReserved55	[55] NoTpidProcessing,
+	tpidReserved56	[56] NoTpidProcessing,
+	tpidReserved57	[57] NoTpidProcessing,
+	tpidReserved58	[58] NoTpidProcessing,
+	tpidReserved59	[59] NoTpidProcessing,
+	tpidReserved60	[60] NoTpidProcessing,
+	tpidReserved61	[61] NoTpidProcessing,
+	tpidReserved62	[62] NoTpidProcessing,
+	tpidReserved63	[63] NoTpidProcessing,
+	tpidReserved64	[64] NoTpidProcessing,
+	tpidReserved65	[65] NoTpidProcessing,
+	tpidReserved66	[66] NoTpidProcessing,
+	tpidReserved67	[67] NoTpidProcessing,
+	tpidReserved68	[68] NoTpidProcessing,
+	tpidReserved69	[69] NoTpidProcessing,
+	tpidReserved70	[70] NoTpidProcessing,
+	tpidReserved71	[71] NoTpidProcessing,
+	tpidReserved72	[72] NoTpidProcessing,
+	tpidReserved73	[73] NoTpidProcessing,
+	tpidReserved74	[74] NoTpidProcessing,
+	tpidReserved75	[75] NoTpidProcessing,
+	tpidReserved76	[76] NoTpidProcessing,
+	tpidReserved77	[77] NoTpidProcessing,
+	tpidReserved78	[78] NoTpidProcessing,
+	tpidReserved79	[79] NoTpidProcessing,
+	tpidReserved80	[80] NoTpidProcessing,
+	tpidReserved81	[81] NoTpidProcessing,
+	tpidReserved82	[82] NoTpidProcessing,
+	tpidReserved83	[83] NoTpidProcessing,
+	tpidReserved84	[84] NoTpidProcessing,
+	tpidReserved85	[85] NoTpidProcessing,
+	tpidReserved86	[86] NoTpidProcessing,
+	tpidReserved87	[87] NoTpidProcessing,
+	tpidReserved88	[88] NoTpidProcessing,
+	tpidReserved89	[89] NoTpidProcessing,
+	tpidReserved90	[90] NoTpidProcessing,
+	tpidReserved91	[91] NoTpidProcessing,
+	tpidReserved92	[92] NoTpidProcessing,
+	tpidReserved93	[93] NoTpidProcessing,
+	tpidReserved94	[94] NoTpidProcessing,
+	tpidReserved95	[95] NoTpidProcessing,
+	tpidReserved96	[96] NoTpidProcessing,
+	tpidReserved97	[97] NoTpidProcessing,
+	tpidReserved98	[98] NoTpidProcessing,
+	tpidReserved99	[99] NoTpidProcessing,
+	tpidReserved100	[100] NoTpidProcessing,
+	tpidReserved101	[101] NoTpidProcessing,
+	tpidReserved102	[102] NoTpidProcessing,
+	tpidReserved103	[103] NoTpidProcessing,
+	tpidReserved104	[104] NoTpidProcessing,
+	tpidReserved105	[105] NoTpidProcessing,
+	tpidReserved106	[106] NoTpidProcessing,
+	tpidReserved107	[107] NoTpidProcessing,
+	tpidReserved108	[108] NoTpidProcessing,
+	tpidReserved109	[109] NoTpidProcessing,
+	tpidReserved110	[110] NoTpidProcessing,
+	tpidReserved111	[111] NoTpidProcessing,
+	tpidReserved112	[112] NoTpidProcessing,
+	tpidReserved113	[113] NoTpidProcessing,
+	tpidReserved114	[114] NoTpidProcessing,
+	tpidReserved115	[115] NoTpidProcessing,
+	tpidReserved116	[116] NoTpidProcessing,
+	tpidReserved117	[117] NoTpidProcessing,
+	tpidReserved118	[118] NoTpidProcessing,
+	tpidReserved119	[119] NoTpidProcessing,
+	tpidReserved120	[120] NoTpidProcessing,
+	tpidReserved121	[121] NoTpidProcessing,
+	tpidReserved122	[122] NoTpidProcessing,
+	tpidReserved123	[123] NoTpidProcessing,
+	tpidReserved124	[124] NoTpidProcessing,
+	tpidReserved125	[125] NoTpidProcessing,
+	tpidReserved126	[126] NoTpidProcessing,
+	tpidReserved127	[127] NoTpidProcessing
+	}
+
+NoTpidProcessing::=BIT STRING (SIZE(1)) 
+
+LMbcPDU::=SEQUENCE{
+	destAddress	VarLengthNumber, -- that is PSID / ITS-AID
+	tExtensions	ShortMsgTextensions OPTIONAL
+	}
+
+LMgeneralPDU::=SEQUENCE{
+	sourcePort	PortNumber,
+	destPort	PortNumber,
+	tExtensions	ShortMsgTextensions OPTIONAL
+	}
+
+LMlppPDU::=SEQUENCE{
+	sourcePort	PortNumber,
+	destPort	PortNumber,
+	lpp	FNTPlpp,
+	tExtensions	ShortMsgTextensions OPTIONAL
+	}
+
+LMpacketCounter::=INTEGER(0..255)
+
+PortNumber::=INTEGER(0..65535)
+
+ShortMsgData::=OCTET STRING
+
+-- T-Extensions
+-- Sequence of 0 to n T-Extension elements
+ShortMsgTextensions::=SEQUENCE OF ShortMsgTextension
+
+-- a single T-Extension element
+ShortMsgTextension::= Extension{{ShortMsgTextTypes}}
+
+-- The below is an extension of ShortMsgTextTypes specified in IEEE 1609.3™-2016
+ShortMsgTextTypes EXT-TYPE::={
+	{ LMpacketID	IDENTIFIED BY c-LMpacketID },
+	...
+	}
+
+LMpacketID::=SEQUENCE{
+	message	TPmessageID,
+	fragment	TPfragmentID,
+ 	noFragments	TPnoFragments
+	}
+
+TPmessageID::=INTEGER(0..65535)
+
+TPfragmentID::=VarLengthNumber2 
+
+TPnoFragments::=INTEGER
+
+-- end of T-Extensions
+
+END

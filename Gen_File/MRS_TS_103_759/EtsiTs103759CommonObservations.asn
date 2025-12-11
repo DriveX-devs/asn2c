@@ -1,0 +1,414 @@
+--! @options: no-auto-fields
+EtsiTs103759CommonObservations {itu-t(0) identified-organization(4) 
+  etsi(0) itsDomain(5) wg5(5) ts(103759) general(1) common-observations(2)
+  major-version-1(1) minor-version-1(1)}
+
+DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+EXPORTS ALL;
+
+IMPORTS
+  C-ASR-SINGLE-OBS
+FROM EtsiTs103759BaseTypes {itu-t(0) identified-organization(4) etsi(0) 
+  itsDomain(5) wg5(5) ts(103759) general(1) base-types(3) major-version-1(1) 
+  minor-version-1 (1)}
+WITH SUCCESSORS
+
+  Uint8
+FROM Ieee1609Dot2BaseTypes {iso(1) identified-organization(3) ieee(111) 
+  standards-association-numbered-series-standards(2) wave-stds(1609) dot2(2)
+  base(1) base-types(2) major-version-2(2) minor-version-4(4)}
+WITH SUCCESSORS
+;
+
+/**
+ * This is the identifier for an observation within a target property,
+ * e.g., speed or security, so the values need to be unique within the target.
+ *
+ * The values of `v2xPduEvidence` and `nonV2xPduEvidence` fields of @ref
+ * TemplateAsr (EtsiTs103759BaseTypes.md#TemplateAsr)
+ * are observation-specific, so they are specified for each of the observations
+ * below. The trigger conditions are application-specific, so they are
+ * specified in AID-specific report modules, such as
+ * @ref EtsiTs103759AsrCam (EtsiTs103759AsrCam.md)).
+ */
+IdMbObs ::= Uint8
+
+-- ********************************************************************************
+-- Beacon issues
+
+/**
+ * This data type is provided for an observation of beacon interval
+ * that is too small. This doesn't apply to repeated PDUs, but only to two 
+ * distinct PDUs.
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex` 
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to
+ * the PDU whose interval since the previous PDU is being flagged as too small.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU
+ * and the PDU that immediately preceded it. 
+ * The PDUs may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the same 
+ * report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Beacon-IntervalTooSmall ::= NULL
+-- IDs
+c-ObsBeacon-IntervalTooSmall  IdMbObs::= 1 -- Class 2
+-- Individual Information Objects
+obs-Beacon-IntervalTooSmall C-ASR-SINGLE-OBS ::= 
+  {Beacon-IntervalTooSmall BY c-ObsBeacon-IntervalTooSmall}
+
+-- ********************************************************************************
+-- Static field issues
+
+/**
+ * This data type is provided for an observation of change in static 
+ * fields. The semantics of the `BIT STRING` are provided in the 
+ * application-specific files.
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex` 
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to
+ * the PDU whose one or more static fields since the previous PDU is being 
+ * flagged as changed.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU
+ * and the PDU that immediately preceded it.
+ * The PDUs may be of any supported type and shall be of type
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in 
+ * the same report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Static-Change ::= BIT STRING
+-- IDs
+c-ObsStatic-Change  IdMbObs::= 1 
+-- Individual Information Objects
+obs-Static-Change C-ASR-SINGLE-OBS ::= 
+  {Static-Change BY c-ObsStatic-Change}
+
+-- ********************************************************************************
+-- Security issues
+
+/**
+ * This data type is provided for an observation, where the messageID
+ * is inconsistent with the psid in the security headerInfo.
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex`
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points
+ * to the PDU for which the `messageId` is being flagged as inconsistent 
+ * with the `psid` in the security `headerInfo`.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU.
+ * The PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the 
+ * same report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Security-MessageIdIncWithHeaderInfo ::= NULL
+-- ID
+c-ObsSecurity-MessageIdIncWithHeaderInfo IdMbObs ::= 1
+-- Individual Information Objects
+obs-Security-MessageIdIncWithHeaderInfo C-ASR-SINGLE-OBS ::= { 
+  Security-MessageIdIncWithHeaderInfo BY 
+    c-ObsSecurity-MessageIdIncWithHeaderInfo
+}
+
+/**
+ * This data type is provided for an observation, where the security 
+ * `headerInfo` is inconsistent with the security profile for that `psid`. 
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex`
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to
+ * the PDU for which the security `headerInfo` is being flagged as inconsistent
+ * with the security profile for that `psid`. 
+ * The `v2xPdus` field in that entry must contain at least the subject PDU. The 
+ * PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the same 
+ * report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Security-HeaderIncWithSecurityProfile ::= NULL
+-- ID
+c-ObsSecurity-HeaderIncWithSecurityProfile IdMbObs ::= 2
+-- Individual Information Objects
+obs-Security-HeaderIncWithSecurityProfile C-ASR-SINGLE-OBS ::= { 
+  Security-HeaderIncWithSecurityProfile BY 
+    c-ObsSecurity-HeaderIncWithSecurityProfile 
+}
+
+/**
+ * This data type is provided for an observation, where the `psid` in the
+ * security `headerInfo` is inconsistent with the psid in the certificate.
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex` 
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to
+ * the PDU for which the `psid` in the security `headerInfo` is being flagged
+ * as inconsistent with the `psid` in the certificate.
+ * The `v2xPdus` field in that entry must contain at least the 
+ * subject PDU.
+ * The PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the 
+ * same report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Security-HeaderPsidIncWithCertificate ::= NULL
+-- ID
+c-ObsSecurity-HeaderPsidIncWithCertificate IdMbObs ::= 3
+-- Individual Information Objects
+obs-Security-HeaderPsidIncWithCertificate C-ASR-SINGLE-OBS ::= { 
+  Security-HeaderPsidIncWithCertificate BY 
+    c-ObsSecurity-HeaderPsidIncWithCertificate 
+}
+
+/**
+ * This data type is provided for an observation, where the message is
+ * is inconsistent with the SSP in the certificate.
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex` 
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points
+ * to the PDU whose content is being flagged as inconsisent with the SSP 
+ * in the certificate.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU.
+ * The PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the
+ * same report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Security-MessageIncWithSsp ::= NULL
+-- ID
+c-ObsSecurity-MessageIncWithSsp IdMbObs ::= 4
+-- Individual Information Objects
+obs-Security-MessageIncWithSsp C-ASR-SINGLE-OBS ::= { 
+  Security-MessageIncWithSsp BY c-ObsSecurity-MessageIncWithSsp 
+}
+
+/**
+ * This data type is provided for an observation, where the `generationTime`
+ * in the security `headerInfo` is outside the validity period of the certificate.
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex` 
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to
+ * the PDU for which the `generationTime` in the security `headerInfo` is being
+ * flagged as outside the validity period in the certificate.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU.
+ * The PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the 
+ * same report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Security-HeaderTimeOutsideCertificateValidity ::= NULL
+-- ID
+c-ObsSecurity-HeaderTimeOutsideCertificateValidity IdMbObs ::= 5
+-- Individual Information Objects
+obs-Security-HeaderTimeOutsideCertificateValidity C-ASR-SINGLE-OBS ::= {
+  Security-HeaderTimeOutsideCertificateValidity BY 
+    c-ObsSecurity-HeaderTimeOutsideCertificateValidity 
+}
+
+/**
+ * This data type is provided for an observation, where the location
+ * in the message is outside the validity region in the certificate.
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex`
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points
+ * to the PDU for which the location in the PDU is being flagged as outside
+ * the validity region in the certificate.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU.
+ * The PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the same
+ * report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Security-MessageLocationOutsideCertificateValidity ::= NULL
+-- ID
+c-ObsSecurity-MessageLocationOutsideCertificateValidity IdMbObs ::= 6
+-- Individual Information Objects
+obs-Security-MessageLocationOutsideCertificateValidity C-ASR-SINGLE-OBS ::= { 
+  Security-MessageLocationOutsideCertificateValidity BY 
+    c-ObsSecurity-MessageLocationOutsideCertificateValidity 
+}
+
+/**
+ * This data type is provided for an observation, where the 
+ * `generationLocation` in the security `headerInfo` is outside the validity region
+ * in the certificate.
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex` 
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to
+ * the PDU for which the `generationLocation` inthe security `headerInfo` is being
+ * flagged as outside the validity region in the certificate.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU.
+ * The PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the same 
+ * report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Security-HeaderLocationOutsideCertificateValidity ::= NULL
+-- ID
+c-ObsSecurity-HeaderLocationOutsideCertificateValidity IdMbObs ::= 7
+-- Individual Information Objects
+obs-Security-HeaderLocationOutsideCertificateValidity C-ASR-SINGLE-OBS ::= { 
+  Security-HeaderLocationOutsideCertificateValidity BY 
+    c-ObsSecurity-HeaderLocationOutsideCertificateValidity 
+}
+
+-- ********************************************************************************
+-- Position issues
+
+/**
+ * This data type is provided for an observation of change in position 
+ * that is too large.
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex` 
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to
+ * the PDU whose position is being flagged as inconsistent with the previous PDU.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU and
+ * the PDU that immediately preceded it. 
+ * The PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the same 
+ * report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Position-ChangeTooLarge ::= NULL
+-- IDs
+c-ObsPosition-ChangeTooLarge IdMbObs ::= 4 
+-- Individual Information Objects
+obs-Position-ChangeTooLarge C-ASR-SINGLE-OBS ::= { 
+  Position-ChangeTooLarge BY c-ObsPosition-ChangeTooLarge 
+}
+
+-- ********************************************************************************
+-- Speed issues
+
+/**
+ * This data type is provided for an observation of speed too large
+ * for a given vehicle type.
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex` 
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to
+ * the PDU whose speed is being flagged as too large for the vehicle type.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU.
+ * The PDU may be of any supported type and shall be of type
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the
+ * same report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Speed-ValueTooLarge-VehicleType ::= NULL
+-- ID
+c-ObsSpeed-ValueTooLarge-VehicleType IdMbObs::= 3
+-- Individual Information Objects
+obs-Speed-ValueTooLarge-VehicleType C-ASR-SINGLE-OBS ::= { 
+ Speed-ValueTooLarge-VehicleType BY c-ObsSpeed-ValueTooLarge-VehicleType 
+}
+
+/**
+ * This data type is provided for an observation of speed too large
+ * for the reverse drive direction.
+ * 
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex` 
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to 
+ * the PDU whose speed is being flagged as too large for the reverse drive direction.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU.
+ * The PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the same
+ * report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Speed-ValueTooLarge-DriveDirectionReverse ::= NULL
+-- ID
+c-ObsSpeed-ValueTooLarge-DriveDirectionReverse IdMbObs::= 4
+-- Individual Information Objects
+obs-Speed-ValueTooLarge-DriveDirectionReverse C-ASR-SINGLE-OBS ::= { 
+  Speed-ValueTooLarge-DriveDirectionReverse BY 
+    c-ObsSpeed-ValueTooLarge-DriveDirectionReverse 
+}
+
+/**
+ * This data type is provided for an observation of change in speed 
+ * that is too large. 
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex`
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to
+ * the PDU whose speed is being flagged as inconsistent with the speed
+ * in the previous PDU.
+ * The `v2xPdus` field in that entry must contain at least the subject PDU
+ * and the PDU that immediately preceded it.
+ * The PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the 
+ * same report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+Speed-ChangeTooLarge ::= NULL
+-- IDs
+c-ObsSpeed-ChangeTooLarge IdMbObs::= 5
+-- Individual Information Objects
+obs-Speed-ChangeTooLarge C-ASR-SINGLE-OBS ::= { 
+  Speed-ChangeTooLarge BY c-ObsSpeed-ChangeTooLarge 
+} 
+
+
+-- ********************************************************************************
+-- Longitudinal acceleration issues
+
+/**
+ * This data type is provided for an observation of longitudinal
+ * acceleration that is too large. 
+ *
+ *   - `v2xPduEvidence`: This field must contain at least one entry.
+ * The observation applies to the first entry. The `subjectPduIndex` 
+ * in that @ref V2xPduStream (EtsiTs103759BaseTypes.md#V2xPduStream) points to
+ * the PDU whose longitudinal acceleration is being flagged as too large. 
+ * The `v2xPdus` field in that entry must contain at least the subject PDU.
+ * The PDU may be of any supported type and shall be of type 
+ * `c-MbObsMsg-ieee1609Dot2Data` unless another observation included in the 
+ * same report requires a different PDU type.
+ *
+ *   - `nonV2xPduEvidence`: No other evidence is required to be included 
+ * to support this observation.
+ */
+LongAcc-ValueTooLarge ::= NULL
+-- ID
+c-ObsLongAcc-ValueTooLarge IdMbObs::= 4
+-- Individual Information Objects
+obs-LongAcc-ValueTooLarge C-ASR-SINGLE-OBS ::= { 
+  LongAcc-ValueTooLarge BY c-ObsLongAcc-ValueTooLarge 
+}
+
+END

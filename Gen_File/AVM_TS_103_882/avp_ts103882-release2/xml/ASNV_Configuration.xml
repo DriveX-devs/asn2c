@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?><asnv><protocol name="MIM"><encoding entry-point="MIM" method="per"/><lower-layer name="btp" value2="2018"/><source path="ASNV_Module_MIM.xml"/></protocol><protocol name="MVM"><encoding entry-point="MVM" method="per"/><lower-layer name="btp" value2="2019"/><source path="ASNV_Module_MVM.xml"/></protocol></asnv>

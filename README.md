@@ -1,18 +1,17 @@
+<p align="center">
+  <img src="logo.png" alt="Logo" width="200"/>
+</p>
+
+
 # About
 
-ASN.1 to C compiler takes the ASN.1 module files (example) and generates
-the C++ compatible C source code. That code can be used to serialize
-the native C structures into compact and unambiguous BER/OER/PER/XER/JER-based
-data files, and deserialize the files back.
+asn2c is a project developed at Politecnico di Torino, created by extending and modifying the codebase of the open-source ASN.1 compiler asn1c. The goal of asn2c is to preserve the robustness and maturity of asn1c while introducing new features, improved constraint handling, and a more user-friendly approach to version management and maintainability. Among the enhancements introduced in asn2c are the support for additional ASN.1 constraints, better diagnostic messages, cleaner internal structures for constraint resolution, and several architectural improvements designed to ease future extensions of the compiler.
 
-Various ASN.1 based formats are widely used in the industry,
-such as to encode the X.509 certificates employed in the HTTPS handshake,
-to exchange control data between mobile phones and cellular networks,
-to perform car-to-car communication in intelligent transportation networks.
+The original ASN.1 to C compiler (asn1c) takes ASN.1 module files and generates C/C++-compatible source code. This generated code can be used to serialize native C structures into compact and unambiguous BER/OER/PER/XER/JER-based encodings, and to deserialize the resulting data back into structured objects.
 
-The ASN.1 family of standards is large and complex, and no open source
-compiler supports it in its entirety.
-The asn1c is arguably the most evolved open source ASN.1 compiler.
+ASN.1-based formats are widely adopted across multiple industries. They are used to encode X.509 certificates in HTTPS handshakes, to exchange control messages between mobile phones and cellular networks, and to support car-to-car communication in intelligent transportation systems, among many other applications.
+
+The ASN.1 family of standards is broad and highly complex, and no open-source compiler provides complete coverage of all its features. Nevertheless, asn1c is arguably the most advanced and widely used open-source ASN.1 compiler available today. The asn2c project builds upon this foundation, aiming to push the capabilities of the tool further and to provide a modern, extensible, and developer-friendly environment for ASN.1-to-C code generation.
 
 # ASN.1 Transfer Syntaxes
 <details>
@@ -58,7 +57,7 @@ for a short installation guide.
 
 # Documentation
 
-For the list of asn1c command line options, see `asn1c -h` or `man asn1c`.
+For the list of asn1c command line options, see `asn2c -h`.
 
 The comprehensive documentation on this compiler is in [doc/asn1c-usage.pdf](doc/asn1c-usage.pdf).
 
@@ -74,12 +73,12 @@ An excellent book on ASN.1 is written by Olivier Dubuisson:
 After installing the compiler (see [INSTALL.md](INSTALL.md)), you may use
 the asn1c command to compile the ASN.1 specification:
 
-    asn1c <module.asn1>                         # Compile module
+    asn2c <module.asn1>                         # Compile module
 
 If several specifications contain interdependencies, all of them must be
 specified at the same time:
 
-    asn1c <module1.asn1> <module2.asn1> ...     # Compile interdependent modules
+    asn2c <module1.asn1> <module2.asn1> ...     # Compile interdependent modules
 
 The asn1c source tarball contains the [examples/](examples/) directory
 with several ASN.1 modules and a [script](examples/crfc2asn1.pl)
@@ -88,7 +87,7 @@ Refer to the [examples/README](examples/README) file in that directory.
 
 To compile the X.509 PKI module:
 
-    ./asn1c/asn1c -P ./examples/rfc3280-*.asn1  # Compile-n-print
+    ./asn1c/asn2c -P ./examples/rfc3280-*.asn1  # Compile-n-print
 
 In this example, the **-P** option is to print the compiled text on the
 standard output. The default behavior is that asn1c compiler creates
@@ -102,7 +101,7 @@ to dump out the parsed (and fixed) ASN.1 specification as it was
 whether a particular syntactic construction is properly supported
 by the compiler.
 
-    asn1c -EF <module-to-test.asn1>             # Check semantic validity
+    asn2c -EF <module-to-test.asn1>             # Check semantic validity
 # Difference from asn1c
 
 asn2c is a branched version of asn1c, designed to compile the new IEEE 1609.2.1 ASN.1 files
@@ -132,5 +131,4 @@ after each stage of operation:
 
 
 -- 
-Lev Walkin
-vlm@lionet.info
+

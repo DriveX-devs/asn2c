@@ -1,0 +1,12 @@
+SaeJ3287AsrBsm {joint-iso-itu-t(2) country(16) us(840) organization(1)
+  sae(114566) v2x-communications(1) technical-committees(1) v2x-security(4)
+  technical-reports(1) misbehavior-reporting(1) asn1-module(1) 
+  aid-specific(2) bsm(32) major-version-1(1) minor-version-0(0)}
+
+DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+EXPORTS ALL;
+
+AsrBsm ::= NULL
+
+END

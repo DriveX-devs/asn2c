@@ -1,0 +1,14 @@
+EtsiTs103759AsrAppAgnostic {itu-t(0) identified-organization(4) etsi(0)
+  itsDomain(5) wg5(5) ts(103759) aid-specific(2) appAgnostic(270549119) 
+  major-version-1(1) minor-version-0(0)}
+
+DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+EXPORTS ALL;
+
+/**
+ * This data type is defined as NULL for this version of the standard.
+ */
+AsrAppAgnostic ::= NULL
+
+END
