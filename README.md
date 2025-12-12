@@ -13,6 +13,12 @@ ASN.1-based formats are widely adopted across multiple industries. They are used
 
 The ASN.1 family of standards is broad and highly complex, and no open-source compiler provides complete coverage of all its features. Nevertheless, asn1c is arguably the most advanced and widely used open-source ASN.1 compiler available today. The asn2c project builds upon this foundation, aiming to push the capabilities of the tool further and to provide a modern, extensible, and developer-friendly environment for ASN.1-to-C code generation.
 
+# Authors
+The original author of asn1c is Lev Walkin <vlm@lionet.info>.
+
+The author of asn2c, as an extension to asn1c, is Francesco Di Gregorio <fra.digregorio.2002@gmail.com>,
+who developed asn2c as part of his final master degree thesis at Politecnico di Torino.
+
 # ASN.1 Transfer Syntaxes
 <details>
 <summary>ASN.1 encodings interoperability table</summary>
@@ -50,28 +56,22 @@ JER            | jer_encode()               | JER           | jer_decode()
 
 # Build and Install
 
-If you haven't installed the asn1c yet, read the [INSTALL.md](INSTALL.md) file
+If you haven't installed asn2c yet, read the [INSTALL.md](INSTALL.md) file
 for a short installation guide.
 
 [![Build Status](https://travis-ci.com/mouse07410/asn1c.svg?branch=vlm_master)](https://travis-ci.com/mouse07410/asn1c)
 
 # Documentation
 
-For the list of asn1c command line options, see `asn2c -h`.
-
-The comprehensive documentation on this compiler is in [doc/asn1c-usage.pdf](doc/asn1c-usage.pdf).
-
-Please also read the [FAQ](FAQ) file.
+For the list of asn2c command line options, see `asn2c -h`.
 
 An excellent book on ASN.1 is written by Olivier Dubuisson:
 "ASN.1 Communication between heterogeneous systems", ISBN:0-12-6333361-0.
 
 # Quick start
 
-(also check out [doc/asn1c-quick.pdf](doc/asn1c-quick.pdf))
-
 After installing the compiler (see [INSTALL.md](INSTALL.md)), you may use
-the asn1c command to compile the ASN.1 specification:
+the asn2c command to compile the ASN.1 specification:
 
     asn2c <module.asn1>                         # Compile module
 
@@ -80,7 +80,7 @@ specified at the same time:
 
     asn2c <module1.asn1> <module2.asn1> ...     # Compile interdependent modules
 
-The asn1c source tarball contains the [examples/](examples/) directory
+The asn2c source tarball contains the [examples/](examples/) directory
 with several ASN.1 modules and a [script](examples/crfc2asn1.pl)
 to extract the ASN.1 modules from RFC documents.
 Refer to the [examples/README](examples/README) file in that directory.
@@ -90,7 +90,7 @@ To compile the X.509 PKI module:
     ./asn1c/asn2c -P ./examples/rfc3280-*.asn1  # Compile-n-print
 
 In this example, the **-P** option is to print the compiled text on the
-standard output. The default behavior is that asn1c compiler creates
+standard output. The default behavior is that asn2c compiler creates
 multiple .c and .h files for every ASN.1 type found inside the specified
 ASN.1 modules.
 
@@ -102,18 +102,22 @@ whether a particular syntactic construction is properly supported
 by the compiler.
 
     asn2c -EF <module-to-test.asn1>             # Check semantic validity
-# Difference from asn1c
 
-asn2c is a branched version of asn1c, designed to compile the new IEEE 1609.2.1 ASN.1 files
-that were not initially supported by asn1c.
-asn2c include a verbose way to check the dependencies of the ASN.1 files processed.
+# asn2c: differences from asn1c
+
+asn2c is an upgraded version of asn1c, designed to support all the most recent ASN.1 features.
+Therefore, among its advantages, it is able compile the new IEEE 1609.2.1 ASN.1 files that were not initially supported by asn1c.
+
+asn2c also includes a verbose way to check the dependencies of the ASN.1 files processed.
+
+**asn2c supports all the original options of asn1c.**
 
 # Model of operation
 
 The asn2c compiler works by processing the ASN.1 module specifications
 in several stages:
-1. During the first stage, the preproccessing layer analyze all the ASN.1 files and
-    and checks for dependencies or for not supported structures.
+1. During the first stage, the preproccessing stage analyzes all the ASN.1 files and 
+   checks for dependencies or for structures that are not naturally supported by the subsequent stages.
 2. During the second stage, the ASN.1 file is parsed.
    (Parsing produces an ASN.1 syntax tree for the subsequent levels)
 3. During the third stage, the syntax tree is "fixed".
@@ -128,7 +132,3 @@ after each stage of operation:
     <parser> => <fixer> => print                            (-E -F)
     <parser> => <fixer> => <compiler> => print              (-P)
     <parser> => <fixer> => <compiler> => save-compiled      [default]
-
-
--- 
-

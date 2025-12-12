@@ -13,7 +13,7 @@ Configure with the default settings:
 
 Configure with non-standard settings:
 
-asn1c-specific ./configure options include:
+asn2c-specific ./configure options include:
 
   Option                 | Description
 ------------------------ | ---------------------------------------------------
@@ -34,7 +34,7 @@ Build the libraries and the compiler:
 
     make
 
-Ensure asn1c is still behaving well after compiling on your platform:
+Ensure asn2c is still behaving well after compiling on your platform:
 
     make check
 
@@ -45,22 +45,21 @@ Install the compiler into a standard location:
     make install
     # Use ./configure --prefix to override install location.
 
-Display the `asn1c` manual page:
+Display the `asn2c` manual page:
 
-    man asn1c
+    man asn2c
 
 ## Quick Usage Guide
 
 For a usage guide and more information please refer to:
 
  * the [README.md](README.md) file
- * the asn1c manual page `man asn1c`
- * the included quick start PDF [doc/asn1c-quick.pdf](doc/asn1c-quick.pdf)
- * the comprehensive usage documentation [doc/asn1c-usage.pdf](doc/asn1c-usage.pdf)
 
-In case of any difficulties with installing the compiler, consider using
-the Online ASN.1 Compiler at http://lionet.info/asn1c.
+For a more comprehensive usage guide, you can start from the following documents,
+still referred to the original asn1c (but a very good starting point for asn2c):
+* the quick start PDF [doc/asn1c-quick.pdf](doc/asn1c-quick.pdf)
+* the comprehensive usage documentation [doc/asn1c-usage.pdf](doc/asn1c-usage.pdf)
 
 -- 
-Lev Walkin
-vlm@lionet.info
+Adapted by Francesco Di Gregorio (fra.digregorio.2002@gmail.com), starting from
+the original INSTALL.md guide by Lev Walkin (vlm@lionet.info)

@@ -36,6 +36,7 @@ stamp-h*
 
 # /asn1c/
 /asn1c/asn1c
+/asn1c/asn2c
 
 # /asn1c-tools
 /asn1-tools/enber/enber
@@ -104,3 +105,8 @@ doc/docsrc/*.xdv
 *.gcno
 *.gcda
 asn1c/preprocessed_temp/Constrain.asn
+
+# JetBrains projects
+.idea
+.idea/copilot.data.migration.ask.xml
+.idea/copilot.data.migration.ask2agent.xml
